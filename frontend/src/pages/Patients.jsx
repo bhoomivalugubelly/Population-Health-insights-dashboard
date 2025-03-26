@@ -1,359 +1,208 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import './Patients.css';
 
+// Define color palette for pie chart
+const PIE_COLORS = ['#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6']; // Blue, Pink, Green, Orange, Purple
+
 function Patients() {
-  const [patients, setPatients] = useState([]);
+  // State management
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState({
-    gender: 'All',
-    race: 'All',
-    ageGroup: 'All'
-  });
-  const [demographics, setDemographics] = useState({
-    gender: [],
-    race: [],
-    age: []
-  });
+  const [focusArea, setFocusArea] = useState('Cost Drivers');
+  const [riskData, setRiskData] = useState([]);
+  const [ageCostTrends, setAgeCostTrends] = useState([]);
+  const [raceCostTrends, setRaceCostTrends] = useState([]);
+  const [takeaways, setTakeaways] = useState([]);
+  const [ageRiskData, setAgeRiskData] = useState([]);
+  const [raceRiskData, setRaceRiskData] = useState([]);
 
-  // Fetch patients data
+  // Fetch data on mount
   useEffect(() => {
-    const fetchPatients = async () => {
+    const fetchHealthData = async () => {
       try {
         setLoading(true);
-        // Updated URL to include all filters
-        const queryParams = new URLSearchParams({
-          gender: filters.gender !== 'All' ? filters.gender : '',
-          age: filters.ageGroup !== 'All' ? filters.ageGroup : ''
-        }).toString();
-
-        const response = await fetch(`http://localhost:5000/api/patients?${queryParams}`);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
+        const response = await fetch('http://localhost:5000/api/patients');
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
-        setPatients(data);
-        processChartData(data);
+        processHealthInsights(data);
       } catch (err) {
-        setError(`Failed to fetch patients: ${err.message}`);
-        console.error('Error fetching patients:', err);
+        setError(`Failed to fetch data: ${err.message}`);
       } finally {
         setLoading(false);
       }
     };
+    fetchHealthData();
+  }, []);
 
-    fetchPatients();
-  }, [filters.gender, filters.ageGroup]); // Added ageGroup to dependency array
+  // Update risk data when focus area changes
+  useEffect(() => {
+    setRiskData(focusArea === 'Cost Drivers' ? ageRiskData : raceRiskData);
+  }, [focusArea, ageRiskData, raceRiskData]);
 
-  // Process data for charts
-  const processChartData = (data) => {
-    // Gender distribution
-    const genderCounts = data.reduce((acc, patient) => {
-      const gender = patient.GENDER || 'Unknown';
-      acc[gender] = (acc[gender] || 0) + 1;
-      return acc;
-    }, {});
+  // Calculate age from birthdate
+  const calculateAge = (birthDate) => {
+    const today = new Date();
+    const birth = new Date(birthDate);
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
+    return age;
+  };
 
-    const genderData = Object.keys(genderCounts).map(key => ({
-      name: key === 'M' ? 'Male' : key === 'F' ? 'Female' : key,
-      value: genderCounts[key]
-    }));
-
-    // Race distribution
-    const raceCounts = data.reduce((acc, patient) => {
-      const race = patient.RACE || 'Unknown';
-      acc[race] = (acc[race] || 0) + 1;
-      return acc;
-    }, {});
-
-    const raceData = Object.keys(raceCounts).map(key => ({
-      name: key,
-      value: raceCounts[key]
-    }));
-
-    // Age distribution
-    const ageCounts = {
-      '0-18': 0,
-      '19-35': 0,
-      '36-50': 0,
-      '51-65': 0,
-      '65+': 0
-    };
+  // Process health insights from raw data
+  const processHealthInsights = (data) => {
+    const raceExpenses = {};
+    const ageExpenses = { '0-18': [], '19-35': [], '36-50': [], '51-65': [], '65+': [] };
 
     data.forEach(patient => {
-      if (!patient.BIRTHDATE) return;
-      
-      const birthDate = new Date(patient.BIRTHDATE);
-      const today = new Date();
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-      
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-      }
-      
-      if (age <= 18) ageCounts['0-18']++;
-      else if (age <= 35) ageCounts['19-35']++;
-      else if (age <= 50) ageCounts['36-50']++;
-      else if (age <= 65) ageCounts['51-65']++;
-      else ageCounts['65+']++;
+      const race = (patient.RACE || 'Unknown').toLowerCase();
+      const expenses = Number(patient.HEALTHCARE_EXPENSES || 0);
+      const age = calculateAge(patient.BIRTHDATE);
+
+      // Aggregate by race
+      raceExpenses[race] = (raceExpenses[race] || { total: 0, count: 0 });
+      raceExpenses[race].total += expenses;
+      raceExpenses[race].count += 1;
+
+      // Aggregate by age group
+      if (age <= 18) ageExpenses['0-18'].push(expenses);
+      else if (age <= 35) ageExpenses['19-35'].push(expenses);
+      else if (age <= 50) ageExpenses['36-50'].push(expenses);
+      else if (age <= 65) ageExpenses['51-65'].push(expenses);
+      else ageExpenses['65+'].push(expenses);
     });
 
-    const ageData = Object.keys(ageCounts).map(key => ({
-      name: key,
-      value: ageCounts[key]
+    const riskByRace = Object.keys(raceExpenses).map(race => ({
+      name: race,
+      hri: (raceExpenses[race].total / raceExpenses[race].count) / 1000
     }));
 
-    setDemographics({
-      gender: genderData,
-      race: raceData,
-      age: ageData
-    });
-  };
-
-  // Handle filter changes
-  const handleFilterChange = (filterName, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [filterName]: value
+    const riskByAge = Object.keys(ageExpenses).map(group => ({
+      name: group,
+      hri: ageExpenses[group].length ? (ageExpenses[group].reduce((a, b) => a + b, 0) / ageExpenses[group].length) / 1000 : 0
     }));
+
+    const ageCostTrendData = Object.keys(ageExpenses).map(group => ({
+      name: group,
+      avgCost: ageExpenses[group].length ? (ageExpenses[group].reduce((a, b) => a + b, 0) / ageExpenses[group].length) : 0
+    }));
+
+    const raceCostTrendData = Object.keys(raceExpenses).map(race => ({
+      name: race,
+      avgCost: (raceExpenses[race].total / raceExpenses[race].count) || 0
+    }));
+
+    const highRiskRace = riskByRace.reduce((max, curr) => curr.hri > max.hri ? curr : max, { hri: 0 });
+    const highRiskAge = riskByAge.reduce((max, curr) => curr.hri > max.hri ? curr : max, { hri: 0 });
+    const totalCost = data.reduce((sum, p) => sum + Number(p.HEALTHCARE_EXPENSES || 0), 0);
+    const takeaways = [
+      `Highest risk age group: ${highRiskAge.name} (HRI: ${highRiskAge.hri.toFixed(2)})`,
+      `Highest risk race: ${highRiskRace.name} (HRI: ${highRiskRace.hri.toFixed(2)})`,
+      `Total healthcare cost: $${(totalCost / 1000000).toFixed(2)}M`
+    ];
+
+    setAgeRiskData(riskByAge);
+    setRaceRiskData(riskByRace);
+    setRiskData(focusArea === 'Cost Drivers' ? riskByAge : raceRiskData);
+    setAgeCostTrends(ageCostTrendData);
+    setRaceCostTrends(raceCostTrendData);
+    setTakeaways(takeaways);
   };
-
-  // Handle search input change
-  const handleSearchChange = (event) => {
-    setSearchTerm(event.target.value);
-  };
-
-  // Filter patients based on search term and filters
-  const filteredPatients = patients.filter(patient => {
-    const searchLower = searchTerm.toLowerCase();
-    const fullName = `${patient.FIRST || ''} ${patient.LAST || ''}`.toLowerCase();
-    
-    // Apply race filter
-    const matchesRace = filters.race === 'All' || patient.RACE === filters.race;
-    
-    // Apply age filter (client-side since backend doesn't fully support it yet)
-    let matchesAge = true;
-    if (filters.ageGroup !== 'All' && patient.BIRTHDATE) {
-      const birthDate = new Date(patient.BIRTHDATE);
-      const today = new Date();
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-      }
-      const [min, max] = filters.ageGroup.split('-').map(Number);
-      matchesAge = (!max && age >= min) || (age >= min && age <= max);
-    }
-
-    return (fullName.includes(searchLower) || 
-           (patient.SSN && patient.SSN.includes(searchTerm))) &&
-           matchesRace &&
-           matchesAge;
-  });
-
-  // Chart colors
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
   return (
-    <div className="patients-container">
+    <div className="patients-page">
       {/* Header */}
-      <div className="patients-header">
-        <h1>Hospital & Population Health Insights</h1>
-      </div>
-      
-      {/* Navigation */}
-      <div className="navigation">
-        <Link to="/">Dashboard</Link>
-        <Link to="/patients" className="active">Patients</Link>
-        <Link to="/disease-trends">Disease Trends</Link>
-        <Link to="/resources">Hospital Resources</Link>
-        <Link to="/medications">Medications</Link>
-        <Link to="/reports">Reports</Link>
-      </div>
-      
-      {/* Page title */}
-      <div className="page-title">
-        <h2>Patient Registry</h2>
-        <p>View and manage patient records and demographics</p>
-      </div>
-      
-      {/* Search and filter section */}
-      <div className="search-filter-container">
-        <div className="search-box">
-          <input 
-            type="text" 
-            placeholder="Search patients by name or SSN..." 
-            value={searchTerm}
-            onChange={handleSearchChange}
-          />
-          <button className="search-button">Search</button>
-        </div>
-        
-        <div className="filter-options">
-          <div className="filter-group">
-            <label>Gender:</label>
-            <select 
-              value={filters.gender} 
-              onChange={(e) => handleFilterChange('gender', e.target.value)}
-            >
-              <option value="All">All</option>
-              <option value="M">Male</option>
-              <option value="F">Female</option>
-            </select>
-          </div>
-          
-          <div className="filter-group">
-            <label>Race:</label>
-            <select 
-              value={filters.race} 
-              onChange={(e) => handleFilterChange('race', e.target.value)}
-            >
-              <option value="All">All</option>
-              <option value="white">White</option>
-              <option value="black">Black</option>
-              <option value="asian">Asian</option>
-              <option value="hispanic">Hispanic</option>
-            </select>
-          </div>
-          
-          <div className="filter-group">
-            <label>Age Group:</label>
-            <select 
-              value={filters.ageGroup} 
-              onChange={(e) => handleFilterChange('ageGroup', e.target.value)}
-            >
-              <option value="All">All</option>
-              <option value="0-18">0-18</option>
-              <option value="19-35">19-35</option>
-              <option value="36-50">36-50</option>
-              <option value="51-65">51-65</option>
-              <option value="65+">65+</option>
-            </select>
-          </div>
-        </div>
-      </div>
+      <header className="header">
+        <h1>Population Health Insights</h1>
+      </header>
 
-      {/* Demographics charts */}
-      <div className="demographics-section">
-        <h3>Patient Demographics</h3>
-        <div className="charts-container">
-          <div className="chart-card">
-            <h4>Gender Distribution</h4>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie
-                  data={demographics.gender}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  outerRadius={80}
-                  dataKey="value"
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                >
-                  {demographics.gender.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          
-          <div className="chart-card">
-            <h4>Age Distribution</h4>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart
-                data={demographics.age}
-                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="value" fill="#4e7cff" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          
-          <div className="chart-card">
-            <h4>Race Distribution</h4>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie
-                  data={demographics.race}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  outerRadius={80}
-                  dataKey="value"
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                >
-                  {demographics.race.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
+      {/* Navigation */}
+      <nav className="navbar">
+        <Link to="/" className={window.location.pathname === '/' ? 'active' : ''}>Dashboard</Link>
+        <Link to="/patients" className={window.location.pathname === '/patients' ? 'active' : ''}>Patients</Link>
+        <Link to="/disease-trends" className={window.location.pathname === '/disease-trends' ? 'active' : ''}>Disease Trends</Link>
+        <Link to="/reports" className={window.location.pathname === '/reports' ? 'active' : ''}>Reports</Link>
+      </nav>
+     
       
-      {/* Patient list */}
-      <div className="patient-list-section">
-        <h3>Patient List</h3>
-        <div className="patient-count">
-          Total patients: <span>{filteredPatients.length}</span>
+    
+
+      {/* Main Content */}
+      <main className="main-content">
+        <section className="page-header">
+          <h2>Patients</h2>
+          <p>Strategic Insights for Population Health Management</p>
+        </section>
+
+        <div className="focus-selector">
+          <label htmlFor="focus-select">Focus Area:</label>
+          <select
+            id="focus-select"
+            value={focusArea}
+            onChange={(e) => setFocusArea(e.target.value)}
+          >
+            <option value="Cost Drivers">Cost Drivers (Age)</option>
+            <option value="Demographic Risks">Demographic Risks (Race)</option>
+          </select>
         </div>
-        
+
         {loading ? (
-          <div className="loading">Loading patient data...</div>
+          <div className="loading">Processing health insights...</div>
         ) : error ? (
-          <div className="error-message">{error}</div>
+          <div className="error">
+            {error} <button onClick={() => { setLoading(true); setError(null); }}>Retry</button>
+          </div>
         ) : (
-          <div className="table-container">
-            <table className="patient-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Gender</th>
-                  <th>Birth Date</th>
-                  <th>Race</th>
-                  <th>Address</th>
-                  <th>Healthcare Expenses</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredPatients.length === 0 ? (
-                  <tr><td colSpan="7" className="no-data">No patients found.</td></tr>
-                ) : (
-                  filteredPatients.map((patient, index) => (
-                    <tr key={patient.Id || index}>
-                      <td>{`${patient.FIRST || ''} ${patient.LAST || ''}`}</td>
-                      <td>{patient.GENDER === 'M' ? 'Male' : patient.GENDER === 'F' ? 'Female' : patient.GENDER || 'N/A'}</td>
-                      <td>{patient.BIRTHDATE || 'N/A'}</td>
-                      <td>{patient.RACE || 'N/A'}</td>
-                      <td>{`${patient.ADDRESS || ''}, ${patient.CITY || ''}, ${patient.STATE || ''}`}</td>
-                      <td>${patient.HEALTHCARE_EXPENSES ? Number(patient.HEALTHCARE_EXPENSES).toLocaleString() : 'N/A'}</td>
-                      <td>
-                        <button className="view-button">View</button>
-                        <button className="edit-button">Edit</button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <div className="insights-grid">
+            {/* HRI Bar Chart */}
+            <section className="insight-card risk-card">
+              <h3>Health Risk Index (HRI)</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={riskData}>
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => `${value.toFixed(2)}K $ per capita`} />
+                  <Bar dataKey="hri" fill="#3B82F6" />
+                </BarChart>
+              </ResponsiveContainer>
+            </section>
+
+            {/* Cost Distribution Pie Chart */}
+            <section className="insight-card trend-card">
+              <h3>{focusArea === 'Cost Drivers' ? 'Cost Distribution by Age' : 'Cost Distribution by Race'}</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={focusArea === 'Cost Drivers' ? ageCostTrends : raceCostTrends}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    dataKey="avgCost"
+                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  >
+                    {(focusArea === 'Cost Drivers' ? ageCostTrends : raceCostTrends).map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => `$${value.toLocaleString()}`} />
+                </PieChart>
+              </ResponsiveContainer>
+            </section>
+
+            {/* Key Takeaways */}
+            <section className="insight-card takeaways-card">
+              <h3>Key Takeaways</h3>
+              <ul>
+                {takeaways.map((takeaway, index) => (
+                  <li key={index}>{takeaway}</li>
+                ))}
+              </ul>
+            </section>
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }

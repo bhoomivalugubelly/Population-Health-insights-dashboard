@@ -1,12 +1,42 @@
+/* Import Roboto font */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+
+/* Define global CSS variables based on our theme */
+:root {
+  --primary: #4284f5;          /* Updated to match your app-header */
+  --secondary: #4e7cff;        /* Lighter blue for charts/highlights */
+  --background: #f0f2f5;       /* Updated to match app-content */
+  --card-bg: #ffffff;          /* White for cards */
+  --text-primary: #333333;     /* Dark gray for main text */
+  --text-secondary: #666666;   /* Medium gray for subtle text */
+  --alert: #f44336;           /* Red for warnings (status-shortage) */
+  --success: #4caf50;         /* Green for adequate status */
+  --warning: #ff9800;         /* Orange for approaching status */
+  --neutral: #f8f9fa;         /* Light gray for nav background */
+  --shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Updated shadow */
+  --radius: 5px;              /* Updated to match your border-radius */
+  --transition: 0.2s ease;    /* Updated to match your transition */
+  --border: 1px solid #ddd;   /* Common border style */
+}
+
+/* Global styles */
+body {
+  font-family: 'Roboto', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Combined your font with theme */
+  background-color: var(--background);
+  color: var(--text-primary);
+  margin: 0;
+  padding: 0;
+}
+
 .app-container {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   max-width: 1200px;
   margin: 0 auto;
   padding: 0;
 }
 
+/* Header styles */
 .app-header {
-  background-color: #4284f5;
+  background-color: var(--primary);
   color: white;
   padding: 1.5rem;
   text-align: center;
@@ -16,39 +46,41 @@
 .app-header h1 {
   margin: 0;
   font-weight: 500;
+  font-size: 28px; /* From theme */
 }
 
+/* Navigation styles */
 .app-navigation {
   display: flex;
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #ddd;
+  background-color: var(--neutral);
+  border-bottom: var(--border);
 }
 
 .nav-link {
   padding: 1rem 1.5rem;
   text-decoration: none;
-  color: #333;
+  color: var(--text-primary);
   font-weight: 500;
-  transition: all 0.2s ease;
+  transition: var(--transition);
 }
 
 .nav-link:hover {
-  background-color: #e9ecef;
+  background-color: #e9ecef; /* Retained your hover color */
 }
 
+/* Main content */
 .app-content {
   padding: 1.5rem;
-  background-color: #f0f2f5;
-  min-height: calc(100vh - 180px);
+  min-height: calc(100vh - 180px); /* Retained your calculation */
 }
 
-/* FilterBar.css */
-.filter-bar {
-  background-color: white;
+/* FilterBar styles */
+.filter-bar, .filters {
+  background-color: var(--card-bg);
   padding: 1rem;
   margin-bottom: 1.5rem;
-  border-radius: 5px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
   display: flex;
   align-items: center;
 }
@@ -66,22 +98,20 @@
 
 .filter-group {
   flex: 1;
+  display: flex;
+  align-items: center;
 }
 
 .filter-select {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: var(--border);
   border-radius: 4px;
   font-size: 0.9rem;
 }
 
-/* HospitalResources.css */
-.hospital-resources {
-  width: 100%;
-}
-
-.resource-dashboard {
+/* HospitalResources styles */
+.hospital-resources, .resource-dashboard {
   width: 100%;
 }
 
@@ -92,9 +122,9 @@
 }
 
 .card {
-  background-color: white;
-  border-radius: 5px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background-color: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
   padding: 1.5rem;
   flex: 1;
 }
@@ -102,11 +132,11 @@
 .card h2 {
   margin-top: 0;
   margin-bottom: 1.5rem;
-  font-size: 1.2rem;
-  color: #333;
+  font-size: 1.2rem; /* Retained your size */
+  color: var(--text-primary);
 }
 
-/* ICUBedAvailability.css */
+/* ICUBedAvailability styles */
 .icu-bed-availability {
   position: relative;
 }
@@ -127,12 +157,12 @@
 .percentage {
   font-size: 2rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .label {
   font-size: 0.9rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .chart-legend {
@@ -157,15 +187,10 @@
 
 .legend-text {
   font-size: 0.9rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
-/* BedAvailabilityByHospital.css */
-/* .bed-availability-hospital { */
-  /* Styles already covered by card class */
-/* } */
-
-/* StaffingLevels.css */
+/* StaffingLevels styles */
 .staffing-levels {
   width: 100%;
 }
@@ -183,27 +208,27 @@
 .staffing-table td {
   padding: 0.8rem;
   text-align: left;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #eee; /* Retained your border */
 }
 
 .staffing-table th {
   font-weight: 600;
-  color: #333;
-  background-color: #f8f9fa;
+  color: var(--text-primary);
+  background-color: var(--neutral);
 }
 
 .status-adequate {
-  color: #4caf50;
+  color: var(--success);
   font-weight: 500;
 }
 
 .status-shortage {
-  color: #f44336;
+  color: var(--alert);
   font-weight: 500;
 }
 
 .status-approaching {
-  color: #ff9800;
+  color: var(--warning);
   font-weight: 500;
   display: flex;
   align-items: center;
@@ -214,21 +239,41 @@
   font-size: 1.1rem;
 }
 
-/* Patients.css */
+/* Patients styles */
 .patients-container {
   width: 100%;
 }
 
-.filters {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  background-color: white;
-  padding: 1rem;
-  border-radius: 5px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .app-header {
+    padding: 1rem;
+  }
 
-.filter-group {
-  display: flex;
-  align-items: center;}
+  .app-navigation {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .nav-link {
+    padding: 0.8rem;
+  }
+
+  .dashboard-row {
+    flex-direction: column;
+  }
+
+  .filter-bar, .filters {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .filter-controls {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .filter-group {
+    width: 100%;
+  }
+}
