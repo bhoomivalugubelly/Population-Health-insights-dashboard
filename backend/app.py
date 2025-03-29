@@ -104,15 +104,17 @@ def get_patients():
 def get_disease_trends():
     try:
         condition_type = request.args.get('condition_type', 'All')
-        df = conditions.merge(patients[['Id', 'GENDER', 'AGE']], left_on='PATIENT', right_on='Id', how='left')
+        df = conditions.merge(patients[['Id', 'GENDER', 'BIRTHDATE']], left_on='PATIENT', right_on='Id', how='left')
         df['START'] = pd.to_datetime(df['START'], utc=True)
         df['STOP'] = pd.to_datetime(df['STOP'], utc=True, errors='coerce')
+        df['AGE'] = df['BIRTHDATE'].apply(lambda x: (datetime.now() - pd.to_datetime(x)).days // 365)
 
         if condition_type == 'Chronic':
             df = df[df['STOP'].isna()]
         elif condition_type == 'Acute':
             df = df[df['STOP'].notna()]
 
+        # Use top 2 conditions from data
         chronic_conditions = conditions['DESCRIPTION'].value_counts().head(2).index.tolist()
         trends_df = df[df['DESCRIPTION'].isin(chronic_conditions)].groupby([df['START'].dt.year, 'DESCRIPTION']).size().reset_index(name='count')
         trends_data = trends_df.rename(columns={'START': 'year', 'DESCRIPTION': 'condition'}).to_dict(orient='records')
@@ -120,11 +122,11 @@ def get_disease_trends():
         age_bins = [0, 18, 35, 50, 65, 120]
         age_labels = ['0-18', '19-35', '36-50', '51-65', '65+']
         df['age_group'] = pd.cut(df['AGE'], bins=age_bins, labels=age_labels, right=False)
-        heatmap_df = df.groupby(['age_group', 'GENDER']).size().reset_index(name='count')
+        heatmap_df = df.groupby(['age_group', 'GENDER', 'DESCRIPTION']).size().reset_index(name='count')
         heatmap_data = heatmap_df.to_dict(orient='records')
 
-        total_patients = df['PATIENT'].nunique()  # Corrected to unique patients in filtered df
-        top_conditions_df = df[~df['DESCRIPTION'].str.contains('employment', case=False, na=False)]['DESCRIPTION'].value_counts().head(5).reset_index()
+        total_patients = patients['Id'].nunique()
+        top_conditions_df = df['DESCRIPTION'].value_counts().head(5).reset_index()
         top_conditions_df.columns = ['condition', 'count']
         top_conditions_df['percentage'] = (top_conditions_df['count'] / total_patients * 100).round(2)
         top_conditions = top_conditions_df.to_dict(orient='records')
