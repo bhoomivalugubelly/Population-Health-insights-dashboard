@@ -1,222 +1,240 @@
-.hospital-resource-container {
-    background-color: #f5f5f5;
-    min-height: 100vh;
-    padding: 0 20px 40px;
-    font-family: Arial, sans-serif;
+.resource-utilization-container {
+  font-family: 'Inter', Arial, sans-serif;
+  background: linear-gradient(135deg, #F7FAFC 0%, #E5E7EB 100%);
+  min-height: 100vh;
+  padding: 0;
+  margin: 0;
+}
+
+.header {
+  background: linear-gradient(90deg, #3B82F6 0%, #1E3A8A 100%);
+  color: white;
+  padding: 25px;
+  text-align: center;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.header h1 {
+  font-size: 36px;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: 1px;
+}
+
+.navbar {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  padding: 20px 0;
+  background: #FFFFFF;
+  border-bottom: 2px solid #E2E8F0;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+}
+
+.navbar a {
+  text-decoration: none;
+  color: #4B5563;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 12px 24px;
+  border-radius: 10px;
+  transition: all 0.3s ease;
+}
+
+.navbar a.active {
+  color: #3B82F6;
+  background: #DBEAFE;
+}
+
+.navbar a:hover {
+  color: #3B82F6;
+  background: #EFF6FF;
+}
+
+.main-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 40px 30px;
+}
+
+.page-header {
+  text-align: center;
+  margin-bottom: 50px;
+}
+
+.page-header h2 {
+  font-size: 32px;
+  color: #1F2937;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+
+.filters {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 50px;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.filter-group label {
+  font-size: 18px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.filter-group select {
+  padding: 14px 20px;
+  border: 2px solid #D1D5DB;
+  border-radius: 10px;
+  font-size: 16px;
+  background: #FFFFFF;
+  color: #1F2937;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.filter-group select:hover {
+  border-color: #3B82F6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+}
+
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 40px;
+}
+
+.chart-card, .list-card, .metrics-card {
+  background: #FFFFFF;
+  padding: 30px;
+  border-radius: 16px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.chart-card:hover, .list-card:hover, .metrics-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+}
+
+.chart-card h3, .list-card h3, .metrics-card h3 {
+  font-size: 24px;
+  color: #1F2937;
+  font-weight: 700;
+  margin-bottom: 25px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.medications-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.medications-table th, .medications-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.medications-table th {
+  background: #F1F5F9;
+  font-weight: 700;
+  color: #475569;
+}
+
+.medications-table td {
+  font-size: 14px;
+  color: #475569;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.metric {
+  background: #F1F5F9;
+  padding: 20px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.metric p {
+  font-size: 16px;
+  color: #475569;
+  margin-bottom: 10px;
+}
+
+.metric span {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1F2937;
+}
+
+.loading {
+  text-align: center;
+  padding: 60px;
+  color: #6B7280;
+  font-size: 20px;
+  background: #FFFFFF;
+  border-radius: 16px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+}
+
+.error {
+  text-align: center;
+  padding: 40px;
+  color: #DC2626;
+  background: #FEE2E2;
+  border-radius: 16px;
+  font-size: 20px;
+}
+
+.error button {
+  background: #DC2626;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-left: 20px;
+  transition: background 0.3s ease;
+}
+
+.error button:hover {
+  background: #B91C1C;
+}
+
+@media (max-width: 768px) {
+  .insights-grid {
+    grid-template-columns: 1fr;
   }
-  
-  .hospital-resource-header {
-    background-color: #4e7cff;
-    color: white;
+
+  .filters {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .navbar {
+    flex-wrap: wrap;
+    gap: 25px;
     padding: 20px;
-    text-align: center;
   }
-  
-  .hospital-resource-header h1 {
-    margin: 0;
-    font-size: 32px;
+
+  .header h1 {
+    font-size: 28px;
   }
-  
-  .navigation {
-    display: flex;
-    justify-content: center;
-    background-color: white;
-    padding: 15px 0;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  }
-  
-  .navigation a {
-    margin: 0 15px;
-    text-decoration: none;
-    color: #333;
-    font-size: 16px;
-    padding: 8px 12px;
-    transition: color 0.2s;
-  }
-  
-  .navigation a.active {
-    color: #4e7cff;
-    font-weight: bold;
-    border-bottom: 3px solid #4e7cff;
-  }
-  
-  .navigation a:hover {
-    color: #4e7cff;
-  }
-  
-  .page-title {
-    text-align: center;
-    margin: 30px 0;
-  }
-  
-  .page-title h2 {
-    margin: 0;
-    color: #333;
+
+  .page-header h2 {
     font-size: 26px;
   }
-  
-  .page-title p {
-    color: #666;
-    font-size: 14px;
-  }
-  
-  .filters-section {
-    background-color: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-    max-width: 1200px;
-    margin: 0 auto 30px;
-  }
-  
-  .filter-options {
-    display: flex;
-    gap: 20px;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-  
-  .filter-group {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  
-  .filter-group label {
-    color: #333;
-    font-weight: 600;
-    font-size: 14px;
-  }
-  
-  .filter-group select,
-  .filter-group input[type="date"] {
-    padding: 8px 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 14px;
-    min-width: 150px;
-    background-color: #fff;
-  }
-  
-  .charts-section {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
-    max-width: 1200px;
-    margin: 0 auto 30px;
-    background-color: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  }
-  
-  .chart-card {
-    flex: 1;
-    min-width: 300px;
-    padding: 10px;
-  }
-  
-  .chart-card h3 {
-    color: #333;
-    font-size: 18px;
-    text-align: center;
-    margin-bottom: 15px;
-  }
-  
-  .staffing-section {
-    flex: 1;
-    min-width: 300px;
-    padding: 20px;
-  }
-  
-  .staffing-section h3 {
-    color: #333;
-    font-size: 18px;
-    text-align: center;
-    margin-bottom: 15px;
-  }
-  
-  .table-container {
-    overflow-x: auto;
-  }
-  
-  .staffing-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 14px;
-  }
-  
-  .staffing-table th {
-    background-color: #f8f9fa;
-    padding: 12px;
-    text-align: left;
-    color: #333;
-    font-weight: 600;
-    border-bottom: 2px solid #dee2e6;
-  }
-  
-  .staffing-table td {
-    padding: 12px;
-    border-bottom: 1px solid #dee2e6;
-    color: #555;
-  }
-  
-  .staffing-table tr:hover {
-    background-color: #f1f3f5;
-  }
-  
-  .loading {
-    text-align: center;
-    padding: 40px;
-    color: #666;
-    font-size: 16px;
-  }
-  
-  .error-message {
-    text-align: center;
-    padding: 40px;
-    color: #dc3545;
-    font-size: 16px;
-  }
-  
-  .error-message button {
-    margin-left: 15px;
-    padding: 8px 16px;
-    background-color: #4e7cff;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-  }
-  
-  .error-message button:hover {
-    background-color: #3a68d8;
-  }
-  
-  /* Responsive Design */
-  @media (max-width: 768px) {
-    .filters-section {
-      padding: 15px;
-    }
-  
-    .filter-options {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-  
-    .navigation {
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
-    }
-  
-    .charts-section {
-      flex-direction: column;
-    }
-  
-    .chart-card,
-    .staffing-section {
-      min-width: 100%;
-    }
-  }
+}

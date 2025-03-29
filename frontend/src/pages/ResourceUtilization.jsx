@@ -1,227 +1,210 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  BarChart, Bar, XAxis, YAxis, Tooltip, Legend, 
-  PieChart, Pie, Cell, 
-  LineChart, Line,
-  ResponsiveContainer 
-} from 'recharts';
-import './ResourceUtilization.css'; // Updated to match file name
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import './ResourceUtilization.css';
+
+const COLORS = ['#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6'];
 
 const ResourceUtilization = () => {
-  const [resources, setResources] = useState(null);
-  const [hospitals, setHospitals] = useState(['All']);
-  const [hospitalFilter, setHospitalFilter] = useState('All');
-  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [yearFilter, setYearFilter] = useState('All');
+  const [encounterClassFilter, setEncounterClassFilter] = useState('All');
+  const [data, setData] = useState({});
 
   useEffect(() => {
-    const fetchHospitals = async () => {
-      try {
-        const response = await fetch('http://localhost:5000/api/hospitals');
-        if (!response.ok) throw new Error('Failed to fetch hospitals');
-        const data = await response.json();
-        setHospitals(data);
-      } catch (err) {
-        console.error(err);
+    fetchResourceData();
+  }, [yearFilter, encounterClassFilter]);
+
+  const fetchResourceData = async () => {
+    setLoading(true);
+    try {
+      // Corrected URL: Use underscore instead of hyphen
+      const response = await fetch(`http://localhost:5000/api/resource_utilization?year=${yearFilter}&encounterClass=${encounterClassFilter}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch resource utilization data: ${errorText}`);
       }
-    };
-    fetchHospitals();
-  }, []);
+      const result = await response.json();
+      setData(result);
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  useEffect(() => {
-    const fetchResources = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch(
-          `http://localhost:5000/api/hospital_resources_detailed?hospital=${hospitalFilter}&date=${dateFilter}`
-        );
-        if (!response.ok) throw new Error('Failed to fetch resource data');
-        const data = await response.json();
-        setResources(data);
-        setError(null);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchResources();
-  }, [hospitalFilter, dateFilter]);
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+  };
 
-  const bedData = resources ? [
-    { name: 'Occupied Beds', value: resources.Total_Beds - resources.Available_Beds },
-    { name: 'Available Beds', value: resources.Available_Beds }
-  ] : [];
+  const renderTopOrganizations = () => (
+    <section className="chart-card">
+      <h3>Top Organizations by Encounter Volume</h3>
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={data.top_organizations}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="ORG_SHORT" angle={-45} textAnchor="end" height={60} />
+          <YAxis yAxisId="left" />
+          <YAxis yAxisId="right" orientation="right" />
+          <Tooltip formatter={(value, name) => name === 'count' ? [value, 'Encounters'] : [formatCurrency(value), 'Total Cost']} />
+          <Legend />
+          <Bar yAxisId="left" dataKey="count" fill="#3B82F6" name="Encounters" />
+          <Bar yAxisId="right" dataKey="TOTAL_CLAIM_COST" fill="#EC4899" name="Total Cost" />
+        </BarChart>
+      </ResponsiveContainer>
+    </section>
+  );
 
-  const visitData = resources ? [
-    { name: 'Emergency Visits', value: resources.Emergency_Visits },
-    { name: 'Outpatient Visits', value: resources.Outpatient_Visits },
-    { name: 'Inpatient (Active)', value: resources.Total_Beds - resources.Available_Beds }
-  ] : [];
+  const renderEncounterTypes = () => (
+    <section className="chart-card">
+      <h3>Encounter Types Distribution</h3>
+      <ResponsiveContainer width="100%" height={300}>
+        <PieChart>
+          <Pie
+            data={data.encounter_types}
+            dataKey="count"
+            nameKey="class"
+            cx="50%"
+            cy="50%"
+            outerRadius={100}
+            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+          >
+            {data.encounter_types?.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip formatter={(value) => [value, 'Encounters']} />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
+    </section>
+  );
 
-  const ageData = resources ? Object.entries(resources.Demographics.Age_Distribution).map(([key, value]) => ({
-    name: key,
-    value
-  })) : [];
+  const renderTopMedications = () => (
+    <section className="list-card">
+      <h3>Top Medications by Usage</h3>
+      <table className="medications-table">
+        <thead>
+          <tr>
+            <th>Medication</th>
+            <th>Dispenses</th>
+            <th>Total Cost</th>
+            <th>Patients</th>
+            <th>Avg Cost/Dispense</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.top_medications?.map((med, idx) => (
+            <tr key={idx}>
+              <td>{med.medication.length > 30 ? `${med.medication.substring(0, 30)}...` : med.medication}</td>
+              <td>{med.dispenses.toLocaleString()}</td>
+              <td>{formatCurrency(med.total_cost)}</td>
+              <td>{med.patients_count.toLocaleString()}</td>
+              <td>{formatCurrency(med.avg_cost_per_dispense)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
 
-  const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEEAD'];
+  const renderTrends = () => (
+    <section className="chart-card">
+      <h3>Resource Utilization Trends</h3>
+      <ResponsiveContainer width="100%" height={300}>
+        <LineChart data={data.monthly_trends}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="month" />
+          <YAxis yAxisId="left" />
+          <YAxis yAxisId="right" orientation="right" />
+          <Tooltip formatter={(value, name) => name === 'encounters' ? [value, 'Encounters'] : [formatCurrency(value), name === 'total_cost' ? 'Total Cost' : 'Avg Cost/Encounter']} />
+          <Legend />
+          <Line yAxisId="left" type="monotone" dataKey="encounters" stroke="#3B82F6" name="Encounters" />
+          <Line yAxisId="right" type="monotone" dataKey="total_cost" stroke="#EC4899" name="Total Cost" />
+          <Line yAxisId="right" type="monotone" dataKey="cost_per_encounter" stroke="#10B981" name="Avg Cost/Encounter" />
+        </LineChart>
+      </ResponsiveContainer>
+    </section>
+  );
 
-  if (loading) return <div className="loading">Loading hospital resources...</div>;
-  if (error) return (
-    <div className="error-message">
-      Error: {error} <button onClick={() => setLoading(true)}>Retry</button>
-    </div>
+  const renderMetrics = () => (
+    <section className="metrics-card">
+      <h3>Resource Metrics</h3>
+      <div className="metrics-grid">
+        <div className="metric">
+          <p>Total Encounters</p>
+          <span>{data.resource_metrics?.total_encounters.toLocaleString()}</span>
+        </div>
+        <div className="metric">
+          <p>Total Claims Cost</p>
+          <span>{formatCurrency(data.resource_metrics?.total_claims_cost)}</span>
+        </div>
+        <div className="metric">
+          <p>Avg Cost/Encounter</p>
+          <span>{formatCurrency(data.resource_metrics?.avg_cost_per_encounter)}</span>
+        </div>
+        <div className="metric">
+          <p>Payer Coverage</p>
+          <span>{data.resource_metrics?.payer_coverage_percentage}%</span>
+        </div>
+      </div>
+    </section>
   );
 
   return (
-    <div className="hospital-resource-container">
-      <div className="hospital-resource-header">
-        <h1>Hospital & Population Health Insights</h1>
-      </div>
-      <div className="navigation">
+    <div className="resource-utilization-container">
+      <header className="header">
+        <h1>Population Health Insights</h1>
+      </header>
+      <nav className="navbar">
         <Link to="/">Dashboard</Link>
         <Link to="/patients">Patients</Link>
-        <Link to="/disease-tracking">Disease Trends</Link>
-        <Link to="/hospital-resources" className="active">Hospital Resources</Link>
-        <Link to="/medications">Medications</Link>
+        <Link to="/disease-trends">Disease Trends</Link>
+        <Link to="/resource-utilization" className="active">Resource Utilization</Link>
         <Link to="/reports">Reports</Link>
-      </div>
-      <div className="page-title">
-        <h2>Hospital Resource Utilization</h2>
-        <p>Monitor bed occupancy, staffing, and patient trends</p>
-      </div>
-      <div className="filters-section">
-        <div className="filter-options">
+      </nav>
+      <main className="main-content">
+        <section className="page-header">
+          <h2>Resource Utilization</h2>
+        </section>
+
+        <div className="filters">
           <div className="filter-group">
-            <label>Hospital:</label>
-            <select value={hospitalFilter} onChange={(e) => setHospitalFilter(e.target.value)}>
-              {hospitals.map((hospital) => (
-                <option key={hospital} value={hospital}>{hospital}</option>
+            <label>Year:</label>
+            <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}>
+              <option value="All">All Years</option>
+              {data.filters?.available_years.map(year => (
+                <option key={year} value={year}>{year}</option>
               ))}
             </select>
           </div>
           <div className="filter-group">
-            <label>Date:</label>
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              max={new Date().toISOString().split('T')[0]}
-            />
+            <label>Encounter Class:</label>
+            <select value={encounterClassFilter} onChange={(e) => setEncounterClassFilter(e.target.value)}>
+              <option value="All">All Classes</option>
+              {data.filters?.encounter_classes.map(cls => (
+                <option key={cls} value={cls}>{cls}</option>
+              ))}
+            </select>
           </div>
         </div>
-      </div>
-      <div className="charts-section">
-        <div className="chart-card">
-          <h3>Bed Occupancy</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie
-                data={bedData}
-                cx="50%"
-                cy="50%"
-                innerRadius={50}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-              >
-                {bedData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="chart-card">
-          <h3>Visit Types</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={visitData}>
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="value" fill="#4e7cff" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-      <div className="charts-section">
-        <div className="chart-card">
-          <h3>Patient Trends (Last 60 Days)</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={resources.Trends}>
-              <XAxis dataKey="Date" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="Patients" stroke="#4e7cff" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="chart-card">
-          <h3>ICU Forecast (Next 7 Days)</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={resources.Forecast}>
-              <XAxis dataKey="Day" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="PredictedICUPatients" stroke="#FF6B6B" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-      <div className="charts-section">
-        <div className="chart-card">
-          <h3>Age Distribution</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={ageData}>
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="value" fill="#45B7D1" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="staffing-section">
-          <h3>Staffing Levels</h3>
-          <div className="table-container">
-            <table className="staffing-table">
-              <thead>
-                <tr>
-                  <th>Category</th>
-                  <th>Count</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Doctors</td>
-                  <td>{resources.Staffing.Doctors}</td>
-                  <td>{resources.Staffing.Doctors < 10 ? 'Critical' : resources.Staffing.Doctors < 20 ? 'Shortage' : 'Adequate'}</td>
-                </tr>
-                <tr>
-                  <td>Nurses</td>
-                  <td>{resources.Staffing.Nurses}</td>
-                  <td>{resources.Staffing.Nurses < 20 ? 'Critical' : resources.Staffing.Nurses < 40 ? 'Shortage' : 'Adequate'}</td>
-                </tr>
-                <tr>
-                  <td>Specialists</td>
-                  <td>{resources.Staffing.Specialists}</td>
-                  <td>{resources.Staffing.Specialists < 5 ? 'Critical' : resources.Staffing.Specialists < 10 ? 'Shortage' : 'Adequate'}</td>
-                </tr>
-                <tr>
-                  <td>Staff-to-Patient Ratio</td>
-                  <td>{resources.Staffing.StaffToPatientRatio.toFixed(2)}</td>
-                  <td>{resources.Staffing.StaffToPatientRatio < 0.5 ? 'Critical' : resources.Staffing.StaffToPatientRatio < 1 ? 'Low' : 'Good'}</td>
-                </tr>
-              </tbody>
-            </table>
+
+        {loading ? (
+          <div className="loading">Loading resource utilization...</div>
+        ) : error ? (
+          <div className="error">{error} <button onClick={fetchResourceData}>Retry</button></div>
+        ) : (
+          <div className="insights-grid">
+            {renderTopOrganizations()}
+            {renderEncounterTypes()}
+            {renderTopMedications()}
+            {renderTrends()}
+            {renderMetrics()}
           </div>
-        </div>
-      </div>
+        )}
+      </main>
     </div>
   );
 };

@@ -247,243 +247,85 @@ def get_medication_trends():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/hospital_resources_detailed', methods=['GET'])
-def get_hospital_resources_detailed():
+@app.route('/api/resource_utilization', methods=['GET'])
+def get_resource_utilization():
     try:
-        hospital_filter = request.args.get("hospital", "All")
-        date_filter = request.args.get("date")
+        year_filter = request.args.get('year', 'All')
+        encounter_class = request.args.get('encounterClass', 'All')
+
+        # Prepare encounters DataFrame
         enc_df = encounters.copy()
-        claims_df = claims.copy()
-        patients_df = patients.copy()
+        enc_df['START'] = pd.to_datetime(enc_df['START'], errors='coerce', utc=True)
 
-        # Apply hospital filter
-        if hospital_filter != "All":
-            enc_df = enc_df[enc_df["ORGANIZATION"] == hospital_filter]
+        # Apply filters
+        if year_filter != 'All':
+            enc_df = enc_df[enc_df['START'].dt.year == int(year_filter)]
+        if encounter_class != 'All':
+            enc_df = enc_df[enc_df['ENCOUNTERCLASS'] == encounter_class]
 
-        # Parse target date
-        target_date = pd.to_datetime(date_filter, utc=True) if date_filter else datetime(2025, 3, 17, tzinfo=pytz.UTC)
-        enc_df["START"] = pd.to_datetime(enc_df["START"], utc=True)
-        max_date = enc_df["START"].max()
-        if target_date > max_date:
-            target_date = max_date
+        # 1. Top Organizations by Encounter Count and Cost
+        top_orgs = (enc_df.groupby('ORGANIZATION')
+                   .agg({'Id': 'count', 'TOTAL_CLAIM_COST': 'sum'})
+                   .rename(columns={'Id': 'count'})
+                   .sort_values('count', ascending=False)
+                   .head(5))
+        top_orgs['ORG_SHORT'] = top_orgs.index.str[:8] + '...'  # Shortened name for display
+        top_orgs_data = top_orgs.reset_index().to_dict(orient='records')
 
-        # Merge data
-        merged_df = pd.merge(enc_df, claims_df, left_on="Id", right_on="Id", how="inner")
-        merged_df = pd.merge(merged_df, patients_df, left_on="PATIENT", right_on="Id", how="left", suffixes=("", "_patient"))
+        # 2. Encounter Types Distribution
+        encounter_types = (enc_df.groupby('ENCOUNTERCLASS')
+                         .agg({'Id': 'count', 'TOTAL_CLAIM_COST': 'sum', 'BASE_ENCOUNTER_COST': 'sum'})
+                         .rename(columns={'Id': 'count', 'TOTAL_CLAIM_COST': 'total_cost', 'BASE_ENCOUNTER_COST': 'base_cost'}))
+        encounter_types['avg_cost_per_encounter'] = (encounter_types['total_cost'] / encounter_types['count']).round(2)
+        encounter_types_data = encounter_types.reset_index().rename(columns={'ENCOUNTERCLASS': 'class'}).to_dict(orient='records')
 
-        # Visit types
-        emergency_visits = enc_df[enc_df["ENCOUNTERCLASS"] == "emergency"].shape[0]
-        outpatient_visits = enc_df[enc_df["ENCOUNTERCLASS"] == "outpatient"].shape[0]
-        inpatient_encounters = enc_df[enc_df["ENCOUNTERCLASS"] == "inpatient"].copy()
+        # 3. Top Medications by Usage and Cost
+        meds_df = medications.copy()
+        if year_filter != 'All':
+            meds_df['START'] = pd.to_datetime(meds_df['START'], errors='coerce', utc=True)
+            meds_df = meds_df[meds_df['START'].dt.year == int(year_filter)]
+        top_meds = (meds_df.groupby('DESCRIPTION')
+                   .agg({'DISPENSES': 'sum', 'TOTALCOST': 'sum', 'PATIENT': 'nunique'})
+                   .rename(columns={'DISPENSES': 'dispenses', 'TOTALCOST': 'total_cost', 'PATIENT': 'patients_count'})
+                   .sort_values('dispenses', ascending=False)
+                   .head(5))
+        top_meds['avg_cost_per_dispense'] = (top_meds['total_cost'] / top_meds['dispenses']).round(2)
+        top_meds_data = top_meds.reset_index().rename(columns={'DESCRIPTION': 'medication'}).to_dict(orient='records')
 
-        # Active inpatients
-        inpatient_encounters["START"] = pd.to_datetime(inpatient_encounters["START"], utc=True)
-        inpatient_encounters["STOP"] = pd.to_datetime(inpatient_encounters["STOP"], utc=True)
-        active_inpatients = inpatient_encounters[
-            (inpatient_encounters["START"] <= target_date) & 
-            ((inpatient_encounters["STOP"].isna()) | (inpatient_encounters["STOP"] >= target_date))
-        ]
+        # 4. Monthly Trends
+        enc_df['month'] = enc_df['START'].dt.to_period('M').astype(str)
+        monthly_trends = (enc_df.groupby('month')
+                        .agg({'Id': 'count', 'TOTAL_CLAIM_COST': 'sum'})
+                        .rename(columns={'Id': 'encounters', 'TOTAL_CLAIM_COST': 'total_cost'})
+                        .sort_index())
+        monthly_trends['cost_per_encounter'] = (monthly_trends['total_cost'] / monthly_trends['encounters']).round(2)
+        monthly_trends_data = monthly_trends.reset_index().to_dict(orient='records')
 
-        # Severe diagnoses
-        severe_diagnoses = ["709044004", "67782005", "442452003", "254837009"]
-        icu_encounters = merged_df[
-            (merged_df["ENCOUNTERCLASS"] == "inpatient") &
-            (merged_df["DIAGNOSIS1"].isin(severe_diagnoses)) &
-            (pd.to_datetime(merged_df["START"], utc=True) <= target_date) &
-            ((pd.to_datetime(merged_df["STOP"], utc=True).isna()) | (pd.to_datetime(merged_df["STOP"], utc=True) >= target_date))
-        ]
-        icu_beds_occupied = icu_encounters.shape[0]
-
-        # Total beds
-        hospital_volumes = enc_df.groupby("ORGANIZATION").size()
-        avg_volume = hospital_volumes.mean() if not hospital_volumes.empty else 1
-        bed_scaling_factor = 0.5
-        total_beds = int(sum(hospital_volumes * bed_scaling_factor)) if hospital_filter == "All" else int(hospital_volumes.get(hospital_filter, avg_volume) * bed_scaling_factor)
-        available_beds = total_beds - active_inpatients.shape[0]
-        occupancy_rate = (active_inpatients.shape[0] / total_beds) * 100 if total_beds > 0 else 0
-
-        # Staffing
-        unique_providers = merged_df["PROVIDERID"].nunique()
-        staffing = {
-            "Doctors": unique_providers,
-            "Nurses": int(unique_providers * 4),
-            "Specialists": int(unique_providers * 2),
-            "StaffToPatientRatio": (unique_providers + unique_providers * 6) / active_inpatients.shape[0] if active_inpatients.shape[0] > 0 else 0
+        # 5. Resource Metrics
+        resource_metrics = {
+            'total_encounters': int(enc_df['Id'].count()),
+            'total_claims_cost': float(enc_df['TOTAL_CLAIM_COST'].sum()),
+            'avg_cost_per_encounter': float(enc_df['TOTAL_CLAIM_COST'].mean().round(2)) if not enc_df.empty else 0,
+            'payer_coverage_percentage': float((enc_df['PAYER_COVERAGE'].sum() / enc_df['TOTAL_CLAIM_COST'].sum() * 100).round(2)) if enc_df['TOTAL_CLAIM_COST'].sum() > 0 else 0
         }
 
-        # Diagnosis breakdown
-        diagnosis_counts = icu_encounters["DIAGNOSIS1"].value_counts().head(5).to_dict()
-        diagnosis_breakdown = [{"Diagnosis": k, "Count": int(v)} for k, v in diagnosis_counts.items()]
+        # 6. Available Filters
+        available_years = sorted(enc_df['START'].dt.year.unique().tolist())
+        encounter_classes = sorted(enc_df['ENCOUNTERCLASS'].unique().tolist())
 
-        # Demographics
-        active_inpatients_with_demo = pd.merge(active_inpatients, patients_df, left_on="PATIENT", right_on="Id", how="left")
-        age_groups = pd.cut(active_inpatients_with_demo["BIRTHDATE"].apply(lambda x: (target_date - pd.to_datetime(x)).days // 365), 
-                            bins=[0, 18, 35, 50, 65, 100], labels=["0-18", "19-35", "36-50", "51-65", "66+"])
-        age_dist = age_groups.value_counts().to_dict()
-        gender_dist = active_inpatients_with_demo["GENDER"].value_counts().to_dict()
-
-        # Trends (last 30 days)
-        start_date = target_date - pd.Timedelta(days=30)
-        trends_data = enc_df[(enc_df["START"] >= start_date) & (enc_df["START"] <= target_date)]
-        trends = trends_data.groupby(trends_data["START"].dt.date).size().to_dict()
-        trends_list = [{"Date": str(date), "Patients": count} for date, count in trends.items()]
-
-        # Advanced forecast with ARIMA
-        historical_icu = merged_df[(merged_df["ENCOUNTERCLASS"] == "inpatient") & (merged_df["DIAGNOSIS1"].isin(severe_diagnoses))].groupby(merged_df["START"].dt.date).size()
-        if len(historical_icu) > 10:
-            model = ARIMA(historical_icu, order=(1, 1, 1))
-            model_fit = model.fit()
-            forecast = model_fit.forecast(steps=7)
-            forecast = [max(0, int(pred)) for pred in forecast]
-        else:
-            forecast = [icu_beds_occupied] * 7  # Fallback to current value
-        forecast_days = [(target_date + pd.Timedelta(days=i)).strftime("%Y-%m-%d") for i in range(1, 8)]
-        forecast_data = [{"Day": day, "PredictedICUPatients": pred} for day, pred in zip(forecast_days, forecast)]
-
-        # Response
-        utilization = {
-            "ICU_Beds_Occupied": icu_beds_occupied,
-            "Available_Beds": max(0, available_beds),
-            "Total_Beds": total_beds,
-            "Occupancy_Rate": round(occupancy_rate, 2),
-            "Emergency_Visits": emergency_visits,
-            "Outpatient_Visits": outpatient_visits,
-            "Staffing": staffing,
-            "Diagnosis_Breakdown": diagnosis_breakdown,
-            "Demographics": {"Age_Distribution": age_dist, "Gender_Distribution": gender_dist},
-            "Trends": trends_list,
-            "Forecast": forecast_data
+        response_data = {
+            'top_organizations': top_orgs_data,
+            'encounter_types': encounter_types_data,
+            'top_medications': top_meds_data,
+            'monthly_trends': monthly_trends_data,
+            'resource_metrics': resource_metrics,
+            'filters': {
+                'available_years': [str(year) for year in available_years],
+                'encounter_classes': encounter_classes
+            }
         }
+        return json.dumps(response_data, cls=NaNEncoder), 200, {'Content-Type': 'application/json'}
 
-        response = jsonify(utilization)
-        response.status_code = 200
-        response.headers['Content-Type'] = 'application/json; charset=utf-8'
-        return response
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500@app.route('/api/hospital_resources_detailed', methods=['GET'])
-def get_hospital_resources_detailed():
-    try:
-        hospital_filter = request.args.get("hospital", "All")
-        date_filter = request.args.get("date")
-        enc_df = encounters.copy()
-        claims_df = claims.copy()
-        patients_df = patients.copy()
-
-        # Apply hospital filter
-        if hospital_filter != "All":
-            enc_df = enc_df[enc_df["ORGANIZATION"] == hospital_filter]
-
-        # Parse target date (default to today: March 24, 2025)
-        target_date = pd.to_datetime(date_filter, utc=True) if date_filter else pd.Timestamp.now(tz='UTC')
-        enc_df["START"] = pd.to_datetime(enc_df["START"], utc=True)
-        enc_df["STOP"] = pd.to_datetime(enc_df["STOP"], utc=True, errors='coerce')
-
-        # Merge data for detailed analysis
-        merged_df = pd.merge(enc_df, claims_df, left_on="Id", right_on="Id", how="left")
-        merged_df = pd.merge(merged_df, patients_df, left_on="PATIENT", right_on="Id", how="left", suffixes=("", "_patient"))
-
-        # Visit types
-        visit_types = enc_df["ENCOUNTERCLASS"].value_counts().to_dict()
-        emergency_visits = visit_types.get("emergency", 0)
-        outpatient_visits = visit_types.get("outpatient", 0)
-        inpatient_encounters = enc_df[enc_df["ENCOUNTERCLASS"] == "inpatient"].copy()
-
-        # Active inpatients on target date
-        active_inpatients = inpatient_encounters[
-            (inpatient_encounters["START"] <= target_date) &
-            ((inpatient_encounters["STOP"].isna()) | (inpatient_encounters["STOP"] >= target_date))
-        ]
-
-        # ICU Beds (severe diagnoses)
-        severe_diagnoses = ["709044004", "67782005", "442452003", "254837009"]  # Example codes
-        icu_encounters = merged_df[
-            (merged_df["ENCOUNTERCLASS"] == "inpatient") &
-            (merged_df["DIAGNOSIS1"].isin(severe_diagnoses)) &
-            (merged_df["START"] <= target_date) &
-            ((merged_df["STOP"].isna()) | (merged_df["STOP"] >= target_date))
-        ]
-        icu_beds_occupied = icu_encounters.shape[0]
-
-        # Bed calculations (more realistic estimation)
-        if "organizations.csv" in globals():
-            total_beds = organizations[organizations["Id"] == hospital_filter]["BEDS"].sum() if hospital_filter != "All" else organizations["BEDS"].sum()
-        else:
-            hospital_volumes = enc_df.groupby("ORGANIZATION").size()
-            avg_volume = hospital_volumes.mean() if not hospital_volumes.empty else 1
-            bed_scaling_factor = 0.75  # Adjusted for realism
-            total_beds = int(sum(hospital_volumes * bed_scaling_factor)) if hospital_filter == "All" else int(hospital_volumes.get(hospital_filter, avg_volume) * bed_scaling_factor)
-        
-        available_beds = max(0, total_beds - active_inpatients.shape[0])
-        occupancy_rate = (active_inpatients.shape[0] / total_beds) * 100 if total_beds > 0 else 0
-
-        # Staffing (more detailed estimation)
-        unique_providers = merged_df["PROVIDERID"].nunique()
-        active_patients = active_inpatients.shape[0]
-        staffing = {
-            "Doctors": max(1, unique_providers // 3),  # Rough estimate
-            "Nurses": max(1, int(unique_providers * 1.5)),
-            "Specialists": max(1, unique_providers // 5),
-            "StaffToPatientRatio": round((unique_providers + unique_providers * 2) / active_patients, 2) if active_patients > 0 else 0
-        }
-
-        # Diagnosis breakdown
-        diagnosis_counts = icu_encounters["DIAGNOSIS1"].value_counts().head(5).to_dict()
-        diagnosis_breakdown = [{"Diagnosis": k, "Count": int(v)} for k, v in diagnosis_counts.items()]
-
-        # Demographics
-        active_inpatients_with_demo = pd.merge(active_inpatients, patients_df, left_on="PATIENT", right_on="Id", how="left")
-        active_inpatients_with_demo["Age"] = active_inpatients_with_demo["BIRTHDATE"].apply(
-            lambda x: (target_date - pd.to_datetime(x, utc=True)).days // 365 if pd.notna(x) else 0
-        )
-        age_dist = pd.cut(active_inpatients_with_demo["Age"], 
-                          bins=[0, 18, 35, 50, 65, 120], 
-                          labels=["0-18", "19-35", "36-50", "51-65", "66+"], 
-                          right=False).value_counts().to_dict()
-        gender_dist = active_inpatients_with_demo["GENDER"].value_counts().to_dict()
-
-        # Trends (last 60 days for more context)
-        start_date = target_date - pd.Timedelta(days=60)
-        trends_data = enc_df[(enc_df["START"] >= start_date) & (enc_df["START"] <= target_date)]
-        trends = trends_data.groupby(trends_data["START"].dt.date).size().to_dict()
-        trends_list = [{"Date": str(date), "Patients": int(count)} for date, count in sorted(trends.items())]
-
-        # Enhanced ARIMA forecast
-        historical_icu = merged_df[
-            (merged_df["ENCOUNTERCLASS"] == "inpatient") & 
-            (merged_df["DIAGNOSIS1"].isin(severe_diagnoses))
-        ].groupby(merged_df["START"].dt.date).size().reindex(
-            pd.date_range(start_date.date(), target_date.date(), freq='D'), fill_value=0
-        )
-        forecast_steps = 7
-        if len(historical_icu) > 10:
-            model = ARIMA(historical_icu, order=(1, 1, 1))
-            model_fit = model.fit()
-            forecast = model_fit.forecast(steps=forecast_steps)
-            forecast = [max(0, int(pred)) for pred in forecast]
-        else:
-            forecast = [icu_beds_occupied] * forecast_steps
-        forecast_days = [(target_date + pd.Timedelta(days=i)).strftime("%Y-%m-%d") for i in range(1, forecast_steps + 1)]
-        forecast_data = [{"Day": day, "PredictedICUPatients": pred} for day, pred in zip(forecast_days, forecast)]
-
-        # Response
-        utilization = {
-            "Total_Beds": total_beds,
-            "Available_Beds": available_beds,
-            "ICU_Beds_Occupied": icu_beds_occupied,
-            "Occupancy_Rate": round(occupancy_rate, 2),
-            "Emergency_Visits": emergency_visits,
-            "Outpatient_Visits": outpatient_visits,
-            "Staffing": staffing,
-            "Diagnosis_Breakdown": diagnosis_breakdown,
-            "Demographics": {
-                "Age_Distribution": {k: int(v) for k, v in age_dist.items()},
-                "Gender_Distribution": {k: int(v) for k, v in gender_dist.items()}
-            },
-            "Trends": trends_list,
-            "Forecast": forecast_data
-        }
-
-        return jsonify(utilization, cls=NaNEncoder)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
