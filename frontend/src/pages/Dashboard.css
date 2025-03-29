@@ -1,107 +1,153 @@
+/* Root container */
 .dashboard-container {
   text-align: center;
-  padding: 20px;
+  padding: 30px;
   min-height: 100vh;
+  background: linear-gradient(135deg, #f0f6ff 0%, #e3efff 100%); /* Light blue gradient background */
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Modern font */
 }
 
+/* Header Section */
 .dashboard-header {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--primary);
-  padding: 20px;
-  color: white;
+  background: linear-gradient(to right, #007bff, #00aaff); /* Vibrant blue gradient */
+  padding: 25px;
+  color: #ffffff; /* White text for contrast */
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* Soft shadow */
+  margin-bottom: 15px; /* Space before nav */
 }
 
 .header-image {
-  width: 100px;
+  width: 80px;
   height: auto;
-  margin-right: 15px;
-  border-radius: var(--radius);
+  margin-right: 20px;
+  border-radius: 10px;
+  border: 2px solid #ffffff; /* White frame */
 }
 
 .dashboard-title {
-  font-size: 28px;
-  font-weight: 700;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: 1px;
 }
 
+/* Navigation Section */
 .dashboard-nav {
-  margin-top: 20px;
   display: flex;
   justify-content: center;
-  gap: 20px;
+  gap: 25px;
+  max-width: 800px;
+  margin: 0 auto 25px auto; /* Centered, space below */
+  padding: 12px;
+  background: #2f77c3; /* Solid blue to match header */
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .nav-link {
   text-decoration: none;
   font-size: 18px;
-  color: var(--primary);
-  border-bottom: 2px solid transparent;
-  padding: 5px;
-  transition: var(--transition);
+  color: #ffffff; /* White text */
+  padding: 10px 20px;
+  border-radius: 8px;
+  transition: all 0.3s ease; /* Smooth hover effect */
+  font-weight: 500;
 }
 
 .nav-link:hover {
-  border-bottom: 2px solid var(--primary);
+  background: #ffffff; /* White background on hover */
+  color: #007bff; /* Blue text on hover */
 }
 
+/* Summary Section */
 .dashboard-summary {
-  margin-top: 30px;
-  background: var(--card-bg);
-  padding: 20px;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  margin: 0 auto 25px auto;
   max-width: 800px;
-  margin: 30px auto;
+  padding: 20px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
+.dashboard-summary h2 {
+  font-size: 24px;
+  color: #007bff; /* Blue for headings */
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.dashboard-summary p {
+  font-size: 16px;
+  color: #5a769a; /* Muted blue-gray for text */
+  line-height: 1.5;
+}
+
+/* Stats Section */
 .dashboard-stats {
+  margin: 0 auto;
+  max-width: 800px;
+}
+
+.stats-row {
   display: flex;
   justify-content: space-around;
-  margin-top: 20px;
+  gap: 20px;
 }
 
 .stat-card {
-  background: var(--card-bg);
-  padding: 15px;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  width: 200px;
+  background: #ffffff;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  flex: 1;
+  min-width: 150px;
+  transition: transform 0.2s ease; /* Subtle lift on hover */
+}
+
+.stat-card:hover {
+  transform: translateY(-5px); /* Elegant lift effect */
 }
 
 .stat-card h3 {
-  font-size: 20px;
-  color: var(--primary);
+  font-size: 18px;
+  color: #007bff; /* Blue for consistency */
+  margin-bottom: 10px;
+  font-weight: 500;
 }
 
 .stat-card p {
-  font-size: 18px;
-  font-weight: 500;
-  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 600;
+  color: #0056b3; /* Slightly darker blue for emphasis */
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
   .dashboard-header {
     flex-direction: column;
-    text-align: center;
+    padding: 20px;
   }
 
   .header-image {
-    margin-bottom: 10px;
+    margin-bottom: 15px;
+    margin-right: 0;
+  }
+
+  .dashboard-title {
+    font-size: 28px;
   }
 
   .dashboard-nav {
     flex-direction: column;
-    gap: 10px;
+    gap: 15px;
+    padding: 15px;
   }
 
-  .dashboard-stats {
+  .stats-row {
     flex-direction: column;
     gap: 15px;
-  }
-
-  .stat-card {
-    width: 100%;
   }
 }

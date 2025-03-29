@@ -1,205 +1,158 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import './DiseaseTracking.css';
 
-// Fix Leaflet marker icon issue
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
-});
-
 const DiseaseTracking = () => {
-  const [diseaseData, setDiseaseData] = useState([]);
-  const [mapData, setMapData] = useState([]);
-  const [topDiseases, setTopDiseases] = useState([]);
-  const [diseaseOptions, setDiseaseOptions] = useState([]); // Will be set dynamically
-  const [filters, setFilters] = useState({ disease: 'All', location: 'All', timeRange: 'month' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [alert, setAlert] = useState(null);
-  const [showHotspots, setShowHotspots] = useState(false);
+  const [conditionType, setConditionType] = useState('All');
+  const [trendsData, setTrendsData] = useState([]);
+  const [heatmapData, setHeatmapData] = useState([]);
+  const [topConditions, setTopConditions] = useState([]);
+  const [hba1cTrend, setHba1cTrend] = useState([]);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const params = new URLSearchParams(filters).toString();
+    fetchDiseaseTrends();
+  }, [conditionType]);
 
-        // Fetch trends and disease options
-        const trendsResponse = await fetch(`http://localhost:5000/api/disease_trends_detailed?${params}`);
-        if (!trendsResponse.ok) throw new Error('Failed to fetch disease trends');
-        const trendsJson = await trendsResponse.json();
-        const formattedData = trendsJson.data.trends.map(item => ({
-          date: new Date(item.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
-          cases: item.cases,
-          location: item.location,
-          disease: filters.disease === 'All' ? 'All Conditions' : filters.disease,
-          lat: item.lat || 42.3601, // Fallback coordinates
-          lon: item.lon || -71.0589,
-        }));
-        setDiseaseData(formattedData);
-        setMapData(formattedData);
-        setDiseaseOptions(trendsJson.data.diseases || []); // Set dynamic disease options
-
-        // Fetch top diseases
-        const topResponse = await fetch(`http://localhost:5000/api/top_diseases?${params}`);
-        if (!topResponse.ok) throw new Error('Failed to fetch top diseases');
-        const topJson = await topResponse.json();
-        setTopDiseases(topJson.data);
-
-        // Set alert
-        const alertCondition = formattedData.find(d => d.cases > 10);
-        setAlert(alertCondition ? `Alert: High case count (${alertCondition.cases} cases on ${alertCondition.date} in ${alertCondition.location})` : null);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [filters]);
-
-  const handleFilterChange = (filterName, value) => {
-    setFilters(prev => ({ ...prev, [filterName]: value }));
+  const fetchDiseaseTrends = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`http://localhost:5000/api/disease_trends?condition_type=${conditionType}`);
+      if (!response.ok) throw new Error('Failed to fetch disease trends');
+      const { trends, heatmap, top_conditions, hba1c_trend } = await response.json();
+      setTrendsData(trends);
+      setHeatmapData(processHeatmapData(heatmap));
+      setTopConditions(top_conditions);
+      setHba1cTrend(hba1c_trend);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const HotspotLayer = ({ data }) => {
-    const map = useMap();
-    useEffect(() => {
-      if (showHotspots) {
-        data.forEach(item => {
-          if (item.lat && item.lon && item.cases > 10) {
-            const marker = L.circleMarker([item.lat, item.lon], {
-              radius: Math.min(item.cases / 2, 20),
-              color: '#ff0000',
-              fillOpacity: 0.5,
-            }).addTo(map);
-            marker.bindPopup(`${item.location}: ${item.cases} cases on ${item.date}`);
-            return () => map.removeLayer(marker);
-          }
-        });
-      }
-    }, [data, map]);
-    return null;
+  const processHeatmapData = (data) => {
+    const ageGroups = ['0-18', '19-35', '36-50', '51-65', '65+'];
+    const genders = ['M', 'F'];
+    return ageGroups.map(age => ({
+      age_group: age,
+      M: data.filter(d => d.age_group === age && d.GENDER === 'M').reduce((sum, d) => sum + d.count, 0),
+      F: data.filter(d => d.age_group === age && d.GENDER === 'F').reduce((sum, d) => sum + d.count, 0),
+    }));
   };
+
+  const trendConditions = [...new Set(trendsData.map(d => d.condition))];
+  const colors = ['#3B82F6', '#EC4899'];
+  const minYear = trendsData.length > 0 ? Math.min(...trendsData.map(d => d.year)) : 1964;
+  const maxYear = 2025;
 
   if (loading) return <div className="loading">Loading disease trends...</div>;
-  if (error) return <div className="error-message">Error: {error} <button onClick={() => window.location.reload()}>Retry</button></div>;
+  if (error) return <div className="error">{error} <button onClick={fetchDiseaseTrends}>Retry</button></div>;
 
   return (
     <div className="disease-tracking-container">
-      <div className="disease-tracking-header">
-        <h1>Hospital & Population Health Insights</h1>
-      </div>
-
-      <div className="navigation">
+      <header className="header">
+        <h1>Population Health Insights</h1>
+      </header>
+      <nav className="navbar">
         <Link to="/">Dashboard</Link>
         <Link to="/patients">Patients</Link>
-        <Link to="/disease-tracking" className="active">Disease Trends</Link>
-        <Link to="/hospital-resources">Hospital Resources</Link>
+        <Link to="/disease-trends" className="active">Disease Trends</Link>
         <Link to="/reports">Reports</Link>
-      </div>
+      </nav>
+      <main className="main-content">
+        <section className="page-header">
+          <h2>Disease Trends</h2>
+        </section>
 
-      <div className="page-title">
-        <h2>Disease Tracking & Trends</h2>
-        <p>Monitor outbreaks and trends of chronic & infectious diseases</p>
-      </div>
-
-      <div className="filters-section">
-        <div className="filter-options">
+        <div className="filters">
           <div className="filter-group">
-            <label>Condition:</label>
-            <select value={filters.disease} onChange={(e) => handleFilterChange('disease', e.target.value)}>
+            <label>Condition Type:</label>
+            <select value={conditionType} onChange={(e) => setConditionType(e.target.value)}>
               <option value="All">All Conditions</option>
-              {diseaseOptions.map(disease => (
-                <option key={disease} value={disease}>{disease}</option>
+              <option value="Chronic">Chronic</option>
+              <option value="Acute">Acute</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="insights-grid">
+          <section className="chart-card">
+            <h3>Chronic Condition Prevalence Over Time</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="year" 
+                  domain={[minYear, maxYear]} 
+                  label={{ value: 'Year', position: 'insideBottom', offset: -5 }} 
+                />
+                <YAxis label={{ value: 'Number of Cases', angle: -90, position: 'insideLeft' }} />
+                <Tooltip />
+                <Legend />
+                {trendConditions.map((cond, idx) => (
+                  <Line
+                    key={cond}
+                    data={trendsData.filter(d => d.condition === cond)}
+                    type="monotone"
+                    dataKey="count"
+                    name={cond}
+                    stroke={colors[idx % colors.length]}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </section>
+
+          <section className="chart-card">
+            <h3>Condition Frequency by Age and Gender</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={heatmapData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="age_group" 
+                  label={{ value: 'Age Group', position: 'insideBottom', offset: -5 }} 
+                />
+                <YAxis label={{ value: 'Number of Cases', angle: -90, position: 'insideLeft' }} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="M" fill="#3B82F6" name="Male" />
+                <Bar dataKey="F" fill="#EC4899" name="Female" />
+              </BarChart>
+            </ResponsiveContainer>
+          </section>
+
+          <section className="chart-card">
+            <h3>Hemoglobin A1c Trend</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={hba1cTrend}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="year" 
+                  label={{ value: 'Year', position: 'insideBottom', offset: -5 }} 
+                />
+                <YAxis label={{ value: 'Avg HbA1c (%)', angle: -90, position: 'insideLeft' }} />
+                <Tooltip formatter={(value) => `${value.toFixed(2)}%`} />
+                <Legend />
+                <Line type="monotone" dataKey="avg_hba1c" stroke="#10B981" name="Avg HbA1c" />
+              </LineChart>
+            </ResponsiveContainer>
+          </section>
+
+          <section className="list-card">
+            <h3>Top 5 Conditions</h3>
+            <ul>
+              {topConditions.map((cond, idx) => (
+                <li key={idx}>
+                  {cond.condition}: {cond.count} cases ({cond.percentage}%)
+                </li>
               ))}
-            </select>
-          </div>
-          <div className="filter-group">
-            <label>Location:</label>
-            <select value={filters.location} onChange={(e) => handleFilterChange('location', e.target.value)}>
-              <option value="All">All Locations</option>
-              <option value="MA">Massachusetts</option>
-            </select>
-          </div>
-          <div className="filter-group">
-            <label>Time Range:</label>
-            <select value={filters.timeRange} onChange={(e) => handleFilterChange('timeRange', e.target.value)}>
-              <option value="week">Last Week</option>
-              <option value="month">Last Month</option>
-              <option value="year">Last Year</option>
-            </select>
-          </div>
+            </ul>
+          </section>
         </div>
-      </div>
-
-      {alert && <div className="alert-notification">{alert}</div>}
-
-      <div className="chart-section">
-        <h3>Disease Prevalence Over Time</h3>
-        <ResponsiveContainer width="100%" height={400}>
-          <LineChart data={diseaseData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" label={{ value: 'Date', position: 'insideBottom', offset: -5 }} />
-            <YAxis label={{ value: 'Number of Cases', angle: -90, position: 'insideLeft' }} />
-            <Tooltip formatter={(value, name, props) => [`${value} cases`, `${props.payload.disease} in ${props.payload.location}`]} />
-            <Legend />
-            <Line type="monotone" dataKey="cases" stroke="#4e7cff" name={filters.disease === 'All' ? 'All Conditions' : filters.disease} dot={{ r: 4 }} activeDot={{ r: 8 }} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div className="top-diseases-section">
-        <h3>Top 5 Diseases (Current vs. Previous Period)</h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={topDiseases}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Bar dataKey="currentYear" fill="#4e7cff" name="Current Period" />
-            <Bar dataKey="lastYear" fill="#82ca9d" name="Previous Period" />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div className="map-section">
-        <h3>Disease Hotspot Map</h3>
-        <div className="hotspot-toggle">
-          <label>
-            <input type="checkbox" checked={showHotspots} onChange={() => setShowHotspots(!showHotspots)} />
-            Show Hotspot Alerts ({'>'}10 cases)
-          </label>
-        </div>
-        <ResponsiveContainer width="100%" height={400}>
-          <MapContainer center={[42.3601, -71.0589]} zoom={8} style={{ height: '100%', width: '100%' }}>
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
-            {mapData.map((item, index) => (
-              <Marker key={index} position={[item.lat, item.lon]}>
-                <Popup>{item.location}: {item.cases} cases on {item.date}</Popup>
-              </Marker>
-            ))}
-            {showHotspots && <HotspotLayer data={mapData} />}
-          </MapContainer>
-        </ResponsiveContainer>
-      </div>
-
-      <div className="summary-section">
-        <h3>Summary</h3>
-        <div className="summary-stats">
-          <div>Total Cases: <span>{diseaseData.reduce((sum, item) => sum + item.cases, 0)}</span></div>
-          <div>Peak Day: <span>{diseaseData.reduce((max, item) => item.cases > max.cases ? item : max, diseaseData[0] || {}).date || 'N/A'}</span></div>
-          <div>Average Daily Cases: <span>{(diseaseData.reduce((sum, item) => sum + item.cases, 0) / (diseaseData.length || 1)).toFixed(1)}</span></div>
-        </div>
-      </div>
+      </main>
     </div>
   );
 };

@@ -38,153 +38,109 @@ class NaNEncoder(json.JSONEncoder):
 @app.route("/api/dashboard_stats", methods=["GET"])
 def get_dashboard_stats():
     try:
-        today = pd.Timestamp.now(tz='UTC')
+        # Total Patients: Count unique patients
         total_patients = len(patients)
 
-        conditions["START"] = pd.to_datetime(conditions["START"], utc=True)
-        conditions["STOP"] = pd.to_datetime(conditions["STOP"], utc=True, errors='coerce')
-        active_cases_df = conditions[
-            (conditions["START"] <= today) &
-            ((conditions["STOP"].isna()) | (conditions["STOP"] >= today))
-        ]
-        active_cases = active_cases_df.shape[0]
-        print(f"Active cases: {active_cases}, NaN STOP: {conditions['STOP'].isna().sum()}")  # Debug
-
+        # Active Encounters: Count encounters ongoing as of today
+        today = pd.Timestamp.now(tz="UTC")
         encounters["START"] = pd.to_datetime(encounters["START"], utc=True)
-        encounters["STOP"] = pd.to_datetime(encounters["STOP"], utc=True, errors='coerce')
-        active_inpatients = encounters[
-            (encounters["ENCOUNTERCLASS"] == "inpatient") &
+        encounters["STOP"] = pd.to_datetime(encounters["STOP"], utc=True, errors="coerce")
+        active_encounters_df = encounters[
             (encounters["START"] <= today) &
             ((encounters["STOP"].isna()) | (encounters["STOP"] >= today))
         ]
-        hospital_volumes = encounters.groupby("ORGANIZATION").size()
-        total_beds = int(sum(hospital_volumes * 0.75))
-        occupied_beds = active_inpatients.shape[0]
-        bed_occupancy_rate = occupied_beds / total_beds if total_beds > 0 else 0
+        active_encounters = active_encounters_df.shape[0]
 
-        severe_diagnoses = ["709044004", "67782005", "442452003", "254837009"]
-        merged_df = pd.merge(encounters, claims, left_on="Id", right_on="Id", how="left")
-        icu_encounters = merged_df[
-            (merged_df["ENCOUNTERCLASS"] == "inpatient") &
-            (merged_df["DIAGNOSIS1"].isin(severe_diagnoses)) &
-            (merged_df["START"] <= today) &
-            ((merged_df["STOP"].isna()) | (merged_df["STOP"] >= today))
-        ]
-        icu_beds_occupied = icu_encounters.shape[0]
+        # Total Claims Cost: Sum of TOTAL_CLAIM_COST from encounters.csv
+        total_claims_cost = encounters["TOTAL_CLAIM_COST"].sum()
 
-        last_30_days = today - pd.Timedelta(days=30)
-        recent_visits = encounters[
-            (encounters["START"] >= last_30_days) &
-            (encounters["START"] <= today) &
-            (encounters["ENCOUNTERCLASS"].isin(["emergency", "outpatient"]))
-        ].shape[0]
-
-        resource_strain = (
-            (bed_occupancy_rate * 0.5) +
-            (icu_beds_occupied / total_beds * 0.3 if total_beds > 0 else 0) +
-            (recent_visits / 1000 * 0.2)
-        )
-        resource_strain = min(max(resource_strain, 0), 1)
-
-        print(f"Beds: {total_beds}, Occupied: {occupied_beds}, ICU: {icu_beds_occupied}, Visits: {recent_visits}")  # Debug
+        # Debug prints to verify calculations
+        print(f"Total Patients: {total_patients}")
+        print(f"Active Encounters: {active_encounters}")
+        print(f"Total Claims Cost: {total_claims_cost}")
 
         response_data = {
-            "totalPatients": total_patients,
-            "activeCases": active_cases,
-            "resourceStrain": round(resource_strain, 2)
+            "totalPatients": int(total_patients),
+            "activeEncounters": int(active_encounters),
+            "totalClaimsCost": round(float(total_claims_cost), 2)
         }
         return jsonify(response_data)
     except Exception as e:
+        print(f"Error in get_dashboard_stats: {str(e)}")
         return jsonify({"error": str(e)}), 500
-        
+    
 @app.route('/api/patients', methods=['GET'])
 def get_patients():
-    gender = request.args.get("gender")
-    age_range = request.args.get("age")
-    race = request.args.get("race")
-    df = patients.copy()
-
-    if gender and gender != "All":
-        df = df[df["GENDER"] == gender]
-    if race and race != "All":
-        df = df[df["RACE"] == race]
-    if age_range and age_range != "All":
-        if '-' in age_range:
-            min_age, max_age = map(int, age_range.split('-'))
-            df['AGE'] = pd.to_datetime(df['BIRTHDATE']).apply(
-                lambda x: (pd.Timestamp.now() - x).days // 365
-            )
-            df = df[(df["AGE"] >= min_age) & (df["AGE"] <= max_age)]
-        elif '+' in age_range:
-            min_age = int(age_range.replace('+', ''))
-            df['AGE'] = pd.to_datetime(df['BIRTHDATE']).apply(
-                lambda x: (pd.Timestamp.now() - x).days // 365
-            )
-            df = df[df["AGE"] >= min_age]
-
-    result = df.replace({pd.NA: None, float('nan'): None}).to_dict(orient="records")
-    return json.dumps(result, cls=NaNEncoder), 200, {'Content-Type': 'application/json'}
-
-@app.route('/api/disease_trends_detailed', methods=['GET'])
-def get_disease_trends_detailed():
     try:
-        disease_filter = request.args.get('disease', 'All')
-        location_filter = request.args.get('location', 'All')
-        time_range = request.args.get('timeRange', 'month')
+        df = patients.copy()
+        
+        # Calculate age
+        df['AGE'] = pd.to_datetime(df['BIRTHDATE']).apply(
+            lambda x: (datetime.now() - x).days // 365
+        )
 
-        # Disease mapping
-        disease_mapping = {
-            'Obesity': 'Body mass index 30+ - obesity (finding)',
-            'Employment': 'Full-time employment (finding)',
-            'Education': 'Received higher education (finding)',
-            'Stress': 'Stress (finding)',
-            'Medication Review': 'Medication review due (situation)'
-        }
-        mapped_disease = disease_mapping.get(disease_filter, disease_filter) if disease_filter != 'All' else 'All'
+        # Merge with conditions and medications
+        df_conditions_count = conditions.groupby('PATIENT')['DESCRIPTION'].count().reset_index(name='condition_count')
+        df_conditions_top = conditions.groupby('PATIENT')['DESCRIPTION'].agg(lambda x: x.value_counts().index[0]).reset_index(name='top_condition')
+        df_medications = medications.groupby('PATIENT')['DISPENSES'].sum().reset_index(name='medication_count')
+        
+        df = df.merge(df_conditions_count, left_on='Id', right_on='PATIENT', how='left').fillna({'condition_count': 0})
+        df = df.merge(df_conditions_top, left_on='Id', right_on='PATIENT', how='left').fillna({'top_condition': 'None'})
+        df = df.merge(df_medications, left_on='Id', right_on='PATIENT', how='left').fillna({'medication_count': 0})
+        
+        # Calculate HRI
+        df['HRI'] = (df['condition_count'] * 0.4 + df['HEALTHCARE_EXPENSES'] / 10000 * 0.4 + df['medication_count'] * 0.2)
+        max_hri = df['HRI'].max()
+        df['HRI'] = (df['HRI'] / max_hri * 100).clip(upper=100)
 
-        # Time range logic
-        today = pd.Timestamp(datetime(2025, 3, 18), tz='UTC')
-        if time_range == 'week':
-            start_date = today - timedelta(days=7)
-        elif time_range == 'year':
-            start_date = today - timedelta(days=365)
-        else:  # month
-            start_date = today - timedelta(days=30)
-
-        # Join conditions with patients
-        df = conditions.merge(patients[['Id', 'STATE', 'LAT', 'LON']], left_on='PATIENT', right_on='Id', how='left')
+        # Select relevant columns
+        result = df[['Id', 'GENDER', 'RACE', 'AGE', 'CITY', 'HEALTHCARE_EXPENSES', 'condition_count', 'medication_count', 'HRI', 'top_condition']].to_dict(orient="records")
+        
+        return json.dumps(result, cls=NaNEncoder), 200, {'Content-Type': 'application/json'}
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/api/disease_trends', methods=['GET'])
+def get_disease_trends():
+    try:
+        condition_type = request.args.get('condition_type', 'All')
+        df = conditions.merge(patients[['Id', 'GENDER', 'AGE']], left_on='PATIENT', right_on='Id', how='left')
         df['START'] = pd.to_datetime(df['START'], utc=True)
-        df['STOP'] = df['STOP'].replace('Ongoing', today.strftime('%Y-%m-%d'))
-        df['STOP'] = pd.to_datetime(df['STOP'], utc=True)
+        df['STOP'] = pd.to_datetime(df['STOP'], utc=True, errors='coerce')
 
-        # Filter for active conditions
-        df = df[
-            (df['START'] <= today) & 
-            ((df['STOP'].isna()) | (df['STOP'] >= start_date))
-        ]
+        if condition_type == 'Chronic':
+            df = df[df['STOP'].isna()]
+        elif condition_type == 'Acute':
+            df = df[df['STOP'].notna()]
 
-        # Apply filters
-        if mapped_disease != 'All':
-            df = df[df['DESCRIPTION'] == mapped_disease]
-        if location_filter != 'All':
-            df = df[df['STATE'] == location_filter]
+        chronic_conditions = conditions['DESCRIPTION'].value_counts().head(2).index.tolist()
+        trends_df = df[df['DESCRIPTION'].isin(chronic_conditions)].groupby([df['START'].dt.year, 'DESCRIPTION']).size().reset_index(name='count')
+        trends_data = trends_df.rename(columns={'START': 'year', 'DESCRIPTION': 'condition'}).to_dict(orient='records')
 
-        # Aggregate trends
-        trends = df.groupby([pd.Grouper(key='START', freq='D'), 'STATE', 'LAT', 'LON']).size().reset_index(name='cases')
-        trends_data = trends.rename(columns={'START': 'date', 'STATE': 'location'}).to_dict(orient='records')
+        age_bins = [0, 18, 35, 50, 65, 120]
+        age_labels = ['0-18', '19-35', '36-50', '51-65', '65+']
+        df['age_group'] = pd.cut(df['AGE'], bins=age_bins, labels=age_labels, right=False)
+        heatmap_df = df.groupby(['age_group', 'GENDER']).size().reset_index(name='count')
+        heatmap_data = heatmap_df.to_dict(orient='records')
 
-        # Get top 5 diseases for the dropdown
-        top_diseases = df['DESCRIPTION'].value_counts().head(5).index.tolist()
-        # Map back to simplified names for the frontend
-        reverse_mapping = {v: k for k, v in disease_mapping.items()}
-        top_diseases = [reverse_mapping.get(disease, disease) for disease in top_diseases]
+        total_patients = df['PATIENT'].nunique()  # Corrected to unique patients in filtered df
+        top_conditions_df = df[~df['DESCRIPTION'].str.contains('employment', case=False, na=False)]['DESCRIPTION'].value_counts().head(5).reset_index()
+        top_conditions_df.columns = ['condition', 'count']
+        top_conditions_df['percentage'] = (top_conditions_df['count'] / total_patients * 100).round(2)
+        top_conditions = top_conditions_df.to_dict(orient='records')
 
-        return jsonify({
-            "data": {
-                "trends": trends_data,
-                "diseases": top_diseases  # Add top 5 diseases to the response
-            }
-        }), 200
+        obs_df = observations[observations['DESCRIPTION'] == 'Hemoglobin A1c/Hemoglobin.total in Blood'].copy()
+        obs_df['DATE'] = pd.to_datetime(obs_df['DATE'], utc=True)
+        obs_df['VALUE'] = pd.to_numeric(obs_df['VALUE'], errors='coerce')
+        obs_trend_df = obs_df.groupby(obs_df['DATE'].dt.year)['VALUE'].mean().reset_index()
+        obs_trend_data = obs_trend_df.rename(columns={'DATE': 'year', 'VALUE': 'avg_hba1c'}).to_dict(orient='records')
+
+        return json.dumps({
+            'trends': trends_data,
+            'heatmap': heatmap_data,
+            'top_conditions': top_conditions,
+            'hba1c_trend': obs_trend_data
+        }, cls=NaNEncoder), 200, {'Content-Type': 'application/json'}
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
