@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import './Patients.css';
 
-const PIE_COLORS = ['#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6'];
+const PIE_COLORS = ['#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6','#CC8899'];
 
 function Patients() {
   const [loading, setLoading] = useState(true);

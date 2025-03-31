@@ -3,7 +3,18 @@ import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import './ResourceUtilization.css';
 
-const COLORS = ['#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6'];
+const COLORS = [
+  '#3B82F6', // Blue
+  '#EC4899', // Pink
+  '#10B981', // Green
+  '#F59E0B', // Orange
+  '#8B5CF6', // Purple
+  '#EF4444', // Red
+  '#14B8A6', // Teal
+  '#F97316', // Deep Orange
+  '#6B7280', // Gray
+  '#A855F7', // Light Purple
+];
 
 const ResourceUtilization = () => {
   const [loading, setLoading] = useState(true);

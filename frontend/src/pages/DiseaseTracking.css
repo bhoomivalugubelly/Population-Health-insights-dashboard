@@ -84,8 +84,9 @@
 
 .filter-group {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 .filter-group label {
@@ -105,9 +106,83 @@
   transition: all 0.3s ease;
 }
 
-.filter-group select:hover {
+.filter-group select[multiple] {
+  padding: 10px;
+  border: 2px solid #D1D5DB;
+  border-radius: 10px;
+  font-size: 16px;
+  background: #FFFFFF;
+  color: #1F2937;
+  cursor: pointer;
+  width: 300px;
+  height: 150px;
+  scrollbar-width: thin;
+  scrollbar-color: #3B82F6 #E5E7EB;
+}
+
+/* Webkit scrollbar styling */
+.filter-group select[multiple]::-webkit-scrollbar {
+  width: 8px;
+}
+
+.filter-group select[multiple]::-webkit-scrollbar-track {
+  background: #E5E7EB;
+  border-radius: 10px;
+}
+
+.filter-group select[multiple]::-webkit-scrollbar-thumb {
+  background: #3B82F6;
+  border-radius: 10px;
+}
+
+.filter-group select[multiple]::-webkit-scrollbar-thumb:hover {
+  background: #2563EB;
+}
+
+.filter-group select[multiple]:hover,
+.filter-group select[multiple]:focus {
   border-color: #3B82F6;
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+  outline: none;
+}
+
+.filter-group select[multiple] option {
+  padding: 8px 12px;
+  background: #FFFFFF;
+}
+
+.filter-group select[multiple] option:hover {
+  background: #EFF6FF;
+}
+
+.filter-group select[multiple] option:checked {
+  background: #3B82F6;
+  color: #FFFFFF;
+  font-weight: 600;
+}
+
+.filter-group .select-hint {
+  font-size: 12px;
+  color: #6B7280;
+  margin-top: 4px;
+}
+
+.filter-group input[type="number"] {
+  padding: 14px 20px;
+  border: 2px solid #D1D5DB;
+  border-radius: 10px;
+  font-size: 16px;
+  background: #FFFFFF;
+  color: #1F2937;
+  width: 80px;
+  transition: all 0.3s ease;
+}
+
+.filter-group input[type="number"]:hover,
+.filter-group input[type="number"]:focus {
+  border-color: #3B82F6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+  outline: none;
 }
 
 /* Insights Grid */
@@ -229,5 +304,18 @@
     font-weight: 600;
     transition: background 0.3s ease;
     word-wrap: break-word;
+  }
+
+  .filter-group select[multiple] {
+    width: 100%;
+    height: 120px;
+  }
+
+  .filter-group input[type="number"] {
+    width: 100px;
+  }
+
+  .filter-group .select-hint {
+    font-size: 11px;
   }
 }
