@@ -88,9 +88,9 @@ def get_dashboard_stats():
     except Exception as e:
         print(f"Error in get_dashboard_stats: {str(e)}")
         return jsonify({"error": str(e)}), 500
-    
+
 @app.route('/api/disease_trends', methods=['GET'])
-@cache.cached(timeout=300)
+@cache.cached(timeout=300, query_string=True)
 def get_disease_trends():
     try:
         condition_type = request.args.get('condition_type', 'All')
@@ -114,16 +114,23 @@ def get_disease_trends():
         min_year = current_year - year_range
         df = df[df['START'].dt.year >= min_year]
 
+        print(f"Filtered DF rows: {len(df)}, min_year: {min_year}")  # Debug: Check filtered data size
+
         # Default to top 2 medical conditions if none selected
-        if not selected_conditions:
+        if not selected_conditions or selected_conditions == ['']:
             top_conditions = df['DESCRIPTION'].value_counts().head(2).index.tolist()
             selected_conditions = top_conditions
+            print(f"Default selected_conditions: {selected_conditions}")  # Debug
 
         # 1. Trends Data (sorted by year)
         trends_df = df[df['DESCRIPTION'].isin(selected_conditions)].groupby([df['START'].dt.year, 'DESCRIPTION']).size().reset_index(name='count')
+        if trends_df.empty and selected_conditions:  # Fallback if no data for selected conditions
+            print(f"No data for {selected_conditions}, falling back to all conditions")
+            trends_df = df.groupby([df['START'].dt.year, 'DESCRIPTION']).size().reset_index(name='count')
         trends_df.columns = ['year', 'condition', 'count']
-        trends_df = trends_df.sort_values('year')  # Sort by year
+        trends_df = trends_df.sort_values('year')
         trends_data = trends_df.to_dict(orient='records')
+        print(f"Trends Data: {trends_data}")  # Debug
 
         # 2. Heatmap Data
         age_bins = [0, 18, 35, 50, 65, max(df['AGE'].max(), 120)]
@@ -133,17 +140,17 @@ def get_disease_trends():
         heatmap_data = heatmap_df.to_dict(orient='records')
 
         # 3. Top Conditions
-        total_patients = patients['Id'].nunique()
+        total_cases = len(df)
         top_conditions_df = df['DESCRIPTION'].value_counts().head(5).reset_index()
         top_conditions_df.columns = ['condition', 'count']
-        top_conditions_df['percentage'] = (top_conditions_df['count'] / total_patients * 100).round(2)
+        top_conditions_df['percentage'] = (top_conditions_df['count'] / total_cases * 100).round(2)
         top_conditions = top_conditions_df.to_dict(orient='records')
 
         # 4. HbA1c Trend
         obs_df = observations[observations['DESCRIPTION'] == 'Hemoglobin A1c/Hemoglobin.total in Blood'].copy()
         obs_df = obs_df[obs_df['DATE'].dt.year >= min_year]
         obs_trend_df = obs_df.groupby(obs_df['DATE'].dt.year)['VALUE'].mean().reset_index()
-        obs_trend_df = obs_trend_df.sort_values('DATE')  # Sort by year
+        obs_trend_df = obs_trend_df.sort_values('DATE')
         obs_trend_data = obs_trend_df.rename(columns={'DATE': 'year', 'VALUE': 'avg_hba1c'}).to_dict(orient='records')
 
         return json.dumps({

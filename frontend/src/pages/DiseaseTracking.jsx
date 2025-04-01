@@ -21,11 +21,13 @@ const DiseaseTracking = () => {
   const fetchDiseaseTrends = async () => {
     try {
       setLoading(true);
+      setError(null);
       const params = new URLSearchParams({
         condition_type: conditionType,
         year_range: yearRange,
         ...(selectedConditions.length && { conditions: selectedConditions.join(',') })
       });
+      console.log('Fetching with params:', params.toString());  // Debug
       const response = await fetch(`http://localhost:5000/api/disease_trends?${params}`, { timeout: 10000 });
       if (!response.ok) throw new Error('Failed to fetch disease trends');
       const { trends, heatmap, top_conditions, hba1c_trend } = await response.json();
@@ -36,6 +38,7 @@ const DiseaseTracking = () => {
       setHeatmapData(processHeatmapData(heatmap));
       setTopConditions(top_conditions);
       setHba1cTrend(hba1c_trend);
+      console.log('Fetched Trends Data:', trends);  // Debug
 
       if (!selectedConditions.length && top_conditions.length) {
         setSelectedConditions(top_conditions.slice(0, 2).map(c => c.condition));
@@ -51,10 +54,10 @@ const DiseaseTracking = () => {
           setHba1cTrend(hba1c_trend);
           setError('Using cached data due to: ' + err.message);
         } else {
-          setError(err.message);
+          setError('Cached data expired: ' + err.message);
         }
       } else {
-        setError(err.message);
+        setError('Failed to load data: ' + err.message);
       }
     } finally {
       setLoading(false);
@@ -74,7 +77,7 @@ const DiseaseTracking = () => {
   const trendConditions = selectedConditions.length 
     ? selectedConditions 
     : [...new Set(trendsData.map(d => d.condition))];
-  const colors = ['#3B82F6', '#EC4899', '#10B981', '#F59E0B']; // Added more colors for multiple conditions
+  const colors = ['#3B82F6', '#EC4899', '#10B981', '#F59E0B'];
   const currentYear = new Date().getFullYear();
   const minYear = trendsData.length ? Math.min(...trendsData.map(d => d.year)) : currentYear - yearRange;
   const maxYear = currentYear;
@@ -109,7 +112,7 @@ const DiseaseTracking = () => {
             <label>Select Conditions (Max 2):</label>
             <select
               multiple
-              size="5" // Added visible options
+              size="5"
               value={selectedConditions}
               onChange={(e) => {
                 const options = Array.from(e.target.selectedOptions)
@@ -132,7 +135,10 @@ const DiseaseTracking = () => {
               min="1"
               max="50"
               value={yearRange}
-              onChange={(e) => setYearRange(Math.min(50, Math.max(1, e.target.value)))}
+              onChange={(e) => {
+                const value = Number(e.target.value);
+                setYearRange(Math.min(50, Math.max(1, value)));
+              }}
               aria-label="Set year range (1-50)"
             />
           </div>
@@ -146,31 +152,39 @@ const DiseaseTracking = () => {
           <div className="insights-grid">
             <section className="chart-card">
               <h3>Condition Prevalence Over Time</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={trendsData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="year" 
-                    domain={[minYear, maxYear]} 
-                    label={{ value: 'Year', position: 'insideBottom', offset: -5 }} 
-                    type="number"
-                  />
-                  <YAxis label={{ value: 'Number of Cases', angle: -90, position: 'insideLeft' }} />
-                  <Tooltip />
-                  <Legend />
-                  {trendConditions.map((cond, idx) => (
-                    <Line
-                      key={cond}
-                      type="monotone"
-                      dataKey="count"
-                      data={trendsData.filter(d => d.condition === cond)}
-                      name={cond}
-                      stroke={colors[idx % colors.length]}
-                      dot={{ r: 4 }}
+              {trendsData.length === 0 ? (
+                <p>No data available for the selected conditions and year range. Try adjusting the filters.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={trendsData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="year" 
+                      domain={[minYear, maxYear]} 
+                      label={{ value: 'Year', position: 'insideBottom', offset: -5 }} 
+                      type="number"
                     />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
+                    <YAxis label={{ value: 'Number of Cases', angle: -90, position: 'insideLeft' }} />
+                    <Tooltip />
+                    <Legend />
+                    {trendConditions.map((cond, idx) => {
+                      const filteredData = trendsData.filter(d => d.condition === cond);
+                      console.log(`Filtered data for ${cond}:`, filteredData);
+                      return (
+                        <Line
+                          key={cond}
+                          type="monotone"
+                          dataKey="count"
+                          data={filteredData}
+                          name={cond}
+                          stroke={colors[idx % colors.length]}
+                          dot={{ r: 4 }}
+                        />
+                      );
+                    })}
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </section>
 
             <section className="chart-card">
@@ -212,7 +226,7 @@ const DiseaseTracking = () => {
               <ul>
                 {topConditions.map((cond, idx) => (
                   <li key={idx}>
-                    {cond.condition}: {cond.count} cases ({cond.percentage}%)
+                    {cond.condition}: {cond.count} cases ({cond.percentage}% of total cases)
                   </li>
                 ))}
               </ul>
