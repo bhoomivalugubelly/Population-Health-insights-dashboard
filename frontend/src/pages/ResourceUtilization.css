@@ -133,6 +133,79 @@
   text-transform: uppercase;
 }
 
+/* Specific Chart Fixes */
+
+/* Resource Utilization Trends */
+.chart-card.trends-chart {
+  height: 450px; /* Match the increased height */
+  background: linear-gradient(135deg, #F9FAFB 0%, #E5E7EB 20%); /* Light gradient background */
+  border-radius: 16px;
+}
+
+.chart-card.trends-chart .recharts-cartesian-axis-tick {
+  font-size: 12px; /* Smaller font for X-axis labels */
+  fill: #475569; /* Darker color for readability */
+}
+
+.chart-card.trends-chart .recharts-line {
+  opacity: 0.9; /* Slightly transparent for better overlap handling */
+}
+
+.chart-card.trends-chart .recharts-legend-item {
+  font-size: 14px; /* Smaller legend text */
+  margin-bottom: 5px;
+  color: #1F2937; /* Darker legend text */
+}
+
+/* Tooltip Styling for Better Readability */
+.chart-card.trends-chart .recharts-tooltip-wrapper {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.chart-card.trends-chart .recharts-tooltip-label {
+  font-weight: 700;
+  color: #1F2937;
+}
+
+.chart-card.trends-chart .recharts-tooltip-item {
+  font-size: 14px;
+  color: #475569;
+}
+
+/* Encounter Types Distribution */
+.chart-card.pie-chart {
+  /* Add padding to prevent label overlap */
+  padding: 40px;
+}
+
+.chart-card.pie-chart .recharts-pie-label {
+  font-size: 12px; /* Smaller label font */
+}
+
+.chart-card.pie-chart .recharts-pie-label-line {
+  stroke: #999; /* Lighter label lines */
+  stroke-width: 1;
+}
+
+/* Top Organizations by Encounter Volume */
+.chart-card.top-orgs-chart {
+  /* Add padding to prevent Y-axis overlap */
+  padding-right: 40px;
+}
+
+.chart-card.top-orgs-chart .recharts-cartesian-axis-tick {
+  font-size: 12px; /* Smaller font for axis labels */
+}
+
+.chart-card.top-orgs-chart .recharts-yAxis .recharts-cartesian-axis-tick-value {
+  /* Move right Y-axis labels outward */
+  transform: translateX(10px);
+}
+
+/* Table Styles */
 .medications-table {
   width: 100%;
   border-collapse: collapse;

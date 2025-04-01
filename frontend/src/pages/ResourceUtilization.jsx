@@ -4,16 +4,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import './ResourceUtilization.css';
 
 const COLORS = [
-  '#3B82F6', // Blue
-  '#EC4899', // Pink
-  '#10B981', // Green
-  '#F59E0B', // Orange
-  '#8B5CF6', // Purple
-  '#EF4444', // Red
-  '#14B8A6', // Teal
-  '#F97316', // Deep Orange
-  '#6B7280', // Gray
-  '#A855F7', // Light Purple
+  '#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6',
+  '#EF4444', '#14B8A6', '#F97316', '#6B7280', '#A855F7',
 ];
 
 const ResourceUtilization = () => {
@@ -30,7 +22,6 @@ const ResourceUtilization = () => {
   const fetchResourceData = async () => {
     setLoading(true);
     try {
-      // Corrected URL: Use underscore instead of hyphen
       const response = await fetch(`http://localhost:5000/api/resource_utilization?year=${yearFilter}&encounterClass=${encounterClassFilter}`);
       if (!response.ok) {
         const errorText = await response.text();
@@ -50,16 +41,43 @@ const ResourceUtilization = () => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
   };
 
+  const formatLargeNumber = (value) => {
+    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+    return value.toLocaleString();
+  };
+
   const renderTopOrganizations = () => (
-    <section className="chart-card">
+    <section className="chart-card top-orgs-chart">
       <h3>Top Organizations by Encounter Volume</h3>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data.top_organizations}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="ORG_SHORT" angle={-45} textAnchor="end" height={60} />
-          <YAxis yAxisId="left" />
-          <YAxis yAxisId="right" orientation="right" />
-          <Tooltip formatter={(value, name) => name === 'count' ? [value, 'Encounters'] : [formatCurrency(value), 'Total Cost']} />
+          <XAxis
+            dataKey="ORG_SHORT"
+            angle={-45}
+            textAnchor="end"
+            height={60}
+            label={{ value: 'Organization', position: 'insideBottom', offset: -10 }}
+          />
+          <YAxis
+            yAxisId="left"
+            label={{ value: 'Encounters', angle: -90, position: 'insideLeft' }}
+          />
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            tickFormatter={formatLargeNumber}
+            label={{ value: 'Total Cost ($)', angle: 90, position: 'insideRight' }}
+          />
+          <Tooltip
+            formatter={(value, name) => {
+              console.log('Tooltip name (Top Orgs):', name); // Debug to see what name is passed
+              if (name === 'Encounters') return [value.toLocaleString(), 'Encounters'];
+              if (name === 'Total Cost') return [formatCurrency(value), 'Total Cost'];
+              return [value, name]; // Fallback for debugging
+            }}
+          />
           <Legend />
           <Bar yAxisId="left" dataKey="count" fill="#3B82F6" name="Encounters" />
           <Bar yAxisId="right" dataKey="TOTAL_CLAIM_COST" fill="#EC4899" name="Total Cost" />
@@ -69,7 +87,7 @@ const ResourceUtilization = () => {
   );
 
   const renderEncounterTypes = () => (
-    <section className="chart-card">
+    <section className="chart-card pie-chart">
       <h3>Encounter Types Distribution</h3>
       <ResponsiveContainer width="100%" height={300}>
         <PieChart>
@@ -79,14 +97,15 @@ const ResourceUtilization = () => {
             nameKey="class"
             cx="50%"
             cy="50%"
-            outerRadius={100}
-            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+            outerRadius={70} // Reduced further for clarity
+            label={({ name, percent }) => percent * 100 >= 1 ? `${name}: ${(percent * 100).toFixed(0)}%` : ''} // Show labels only for slices >= 1%
+            labelLine={{ length: 20, length2: 10 }} // Longer label lines
           >
             {data.encounter_types?.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>
-          <Tooltip formatter={(value) => [value, 'Encounters']} />
+          <Tooltip formatter={(value) => [value.toLocaleString(), 'Encounters']} />
           <Legend />
         </PieChart>
       </ResponsiveContainer>
@@ -96,50 +115,100 @@ const ResourceUtilization = () => {
   const renderTopMedications = () => (
     <section className="list-card">
       <h3>Top Medications by Usage</h3>
-      <table className="medications-table">
-        <thead>
-          <tr>
-            <th>Medication</th>
-            <th>Dispenses</th>
-            <th>Total Cost</th>
-            <th>Patients</th>
-            <th>Avg Cost/Dispense</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.top_medications?.map((med, idx) => (
-            <tr key={idx}>
-              <td>{med.medication.length > 30 ? `${med.medication.substring(0, 30)}...` : med.medication}</td>
-              <td>{med.dispenses.toLocaleString()}</td>
-              <td>{formatCurrency(med.total_cost)}</td>
-              <td>{med.patients_count.toLocaleString()}</td>
-              <td>{formatCurrency(med.avg_cost_per_dispense)}</td>
+      <div className="table-container">
+        <table className="medications-table">
+          <thead>
+            <tr>
+              <th>Medication</th>
+              <th>Dispenses</th>
+              <th>Total Cost</th>
+              <th>Patients</th>
+              <th>Avg Cost/Dispense</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data.top_medications?.map((med, idx) => (
+              <tr key={idx}>
+                <td>{med.medication.length > 30 ? `${med.medication.substring(0, 30)}...` : med.medication}</td>
+                <td>{med.dispenses.toLocaleString()}</td>
+                <td>{formatCurrency(med.total_cost)}</td>
+                <td>{med.patients_count.toLocaleString()}</td>
+                <td>{formatCurrency(med.avg_cost_per_dispense)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 
   const renderTrends = () => (
-    <section className="chart-card">
+    <section className="chart-card trends-chart">
       <h3>Resource Utilization Trends</h3>
-      <ResponsiveContainer width="100%" height={300}>
+      <ResponsiveContainer width="100%" height={450}>
         <LineChart data={data.monthly_trends}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="month" />
-          <YAxis yAxisId="left" />
-          <YAxis yAxisId="right" orientation="right" />
-          <Tooltip formatter={(value, name) => name === 'encounters' ? [value, 'Encounters'] : [formatCurrency(value), name === 'total_cost' ? 'Total Cost' : 'Avg Cost/Encounter']} />
-          <Legend />
-          <Line yAxisId="left" type="monotone" dataKey="encounters" stroke="#3B82F6" name="Encounters" />
-          <Line yAxisId="right" type="monotone" dataKey="total_cost" stroke="#EC4899" name="Total Cost" />
-          <Line yAxisId="right" type="monotone" dataKey="cost_per_encounter" stroke="#10B981" name="Avg Cost/Encounter" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+          <XAxis
+            dataKey="month"
+            tickCount={8}
+            angle={-45}
+            textAnchor="end"
+            height={70}
+            label={{ value: 'Month', position: 'insideBottom', offset: -10 }}
+          />
+          <YAxis
+            yAxisId="left"
+            label={{ value: 'Encounters', angle: -90, position: 'insideLeft' }}
+          />
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            tickFormatter={formatLargeNumber}
+            label={{ value: 'Cost ($)', angle: 90, position: 'insideRight' }}
+          />
+          <Tooltip
+            formatter={(value, name) => {
+              console.log('Tooltip name:', name); // Debug to see what name is passed
+              if (name === 'Encounters') return [value.toLocaleString(), 'Encounters'];
+              if (name === 'Total Cost') return [formatCurrency(value), 'Total Cost'];
+              if (name === 'Avg Cost/Encounter') return [formatCurrency(value), 'Avg Cost/Encounter'];
+              return [value, name]; // Fallback for debugging
+            }}
+          />
+          <Legend wrapperStyle={{ paddingTop: '20px' }} />
+          <Line
+            yAxisId="left"
+            type="monotone"
+            dataKey="encounters"
+            stroke="#FF6B6B"
+            strokeWidth={3}
+            name="Encounters"
+            dot={false}
+          />
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="total_cost"
+            stroke="#1A936F"
+            strokeWidth={3}
+            strokeDasharray="5 5"
+            name="Total Cost"
+            dot={false}
+          />
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="cost_per_encounter"
+            stroke="#F48C06"
+            strokeWidth={3}
+            strokeDasharray="3 3"
+            name="Avg Cost/Encounter"
+            dot={false}
+          />
         </LineChart>
       </ResponsiveContainer>
     </section>
   );
-
   const renderMetrics = () => (
     <section className="metrics-card">
       <h3>Resource Metrics</h3>
