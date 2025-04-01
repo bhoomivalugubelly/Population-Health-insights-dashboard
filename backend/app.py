@@ -1,5 +1,8 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from flask import Response
+import io
+import csv
 import json
 from flask_caching import Cache
 import pandas as pd
@@ -358,7 +361,7 @@ def get_resource_utilization():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Optional endpoint for hospital list
+
 @app.route('/api/hospitals', methods=['GET'])
 def get_hospitals():
     try:
@@ -366,6 +369,86 @@ def get_hospitals():
         return jsonify(hospitals)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/reports', methods=['GET'])
+def get_reports():
+    try:
+        report_type = request.args.get('report_type', 'summary')
+        format_type = request.args.get('format', 'json')
+        year_filter = request.args.get('year', 'All')
+
+        enc_df = encounters.copy()
+        enc_df['START'] = pd.to_datetime(enc_df['START'], errors='coerce', utc=True)
+        if year_filter != 'All':
+            enc_df = enc_df[enc_df['START'].dt.year == int(year_filter)]
+
+        if report_type == 'summary':
+            data = {
+                'total_patients': int(patients['Id'].nunique()),
+                'total_encounters': int(enc_df['Id'].count()),
+                'total_claims_cost': float(enc_df['TOTAL_CLAIM_COST'].sum()),
+                'avg_cost_per_encounter': float(enc_df['TOTAL_CLAIM_COST'].mean().round(2)) if not enc_df.empty else 0,
+                'payer_coverage_percentage': float((enc_df['PAYER_COVERAGE'].sum() / enc_df['TOTAL_CLAIM_COST'].sum() * 100).round(2)) if enc_df['TOTAL_CLAIM_COST'].sum() > 0 else 0,
+                'active_patients': int(enc_df['PATIENT'].nunique()),
+            }
+            headers = ['Metric', 'Value']
+            csv_rows = [
+                ['Total Patients', data['total_patients']],
+                ['Total Encounters', data['total_encounters']],
+                ['Total Claims Cost', f"${data['total_claims_cost']:,.2f}"],
+                ['Avg Cost per Encounter', f"${data['avg_cost_per_encounter']:,.2f}"],
+                ['Payer Coverage Percentage', f"{data['payer_coverage_percentage']}%"],
+                ['Active Patients', data['active_patients']],
+            ]
+
+        elif report_type == 'conditions':
+            cond_df = conditions.merge(patients[['Id']], left_on='PATIENT', right_on='Id', how='left')
+            enc_cost_df = enc_df.groupby('PATIENT')['TOTAL_CLAIM_COST'].sum().reset_index()
+            patient_df = patients.merge(enc_cost_df, left_on='Id', right_on='PATIENT', how='left').fillna({'TOTAL_CLAIM_COST': 0})
+            patient_df['HRI'] = patient_df['HEALTHCARE_EXPENSES'] / patient_df['TOTAL_CLAIM_COST'].replace(0, 1) * 100  # Simplified HRI
+            cond_df = cond_df.merge(patient_df[['Id', 'TOTAL_CLAIM_COST', 'HRI']], left_on='PATIENT', right_on='Id', how='left')
+            if year_filter != 'All':
+                cond_df = cond_df[cond_df['START'].dt.year == int(year_filter)]
+            
+            top_conditions = (cond_df.groupby('DESCRIPTION')
+                              .agg({'PATIENT': 'nunique', 'TOTAL_CLAIM_COST': 'sum', 'HRI': 'mean'})
+                              .rename(columns={'PATIENT': 'patientCount', 'TOTAL_CLAIM_COST': 'totalCost', 'HRI': 'avgHRI'})
+                              .sort_values('patientCount', ascending=False)
+                              .head(10))
+            data = top_conditions.reset_index().rename(columns={'DESCRIPTION': 'condition'}).to_dict(orient='records')
+            headers = ['Condition', 'Patient Count', 'Total Cost', 'Average HRI']
+            csv_rows = [headers] + [[row['condition'], row['patientCount'], f"${row['totalCost']:,.2f}", f"{row['avgHRI']:.1f}"] for row in data]
+
+        elif report_type == 'resources':
+            enc_df['year'] = enc_df['START'].dt.year
+            yearly_data = (enc_df.groupby('year')
+                           .agg({'Id': 'count', 'TOTAL_CLAIM_COST': 'sum'})
+                           .rename(columns={'Id': 'encounters', 'TOTAL_CLAIM_COST': 'totalCost'}))
+            yearly_data['avgCostPerEncounter'] = (yearly_data['totalCost'] / yearly_data['encounters']).round(2)
+            data = yearly_data.reset_index().to_dict(orient='records')
+            headers = ['Year', 'Encounters', 'Total Cost', 'Average Cost Per Encounter']
+            csv_rows = [headers] + [[row['year'], row['encounters'], f"${row['totalCost']:,.2f}", f"${row['avgCostPerEncounter']:,.2f}"] for row in data]
+
+        else:
+            return jsonify({"error": "Invalid report type"}), 400
+
+        if format_type == 'csv':
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(headers)
+            writer.writerows(csv_rows[1:] if report_type == 'summary' else csv_rows[1:])
+            csv_data = output.getvalue()
+            output.close()
+            return Response(
+                csv_data,
+                mimetype='text/csv',
+                headers={"Content-Disposition": f"attachment;filename={report_type}_report_{year_filter}.csv"}
+            )
+        else:
+            return json.dumps({"data": data}, cls=NaNEncoder), 200, {'Content-Type': 'application/json'}
+
+    except Exception as e:
+        return jsonify({"error": f"Failed to generate report: {str(e)}"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)

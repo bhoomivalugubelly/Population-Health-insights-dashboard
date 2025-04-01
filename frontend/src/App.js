@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Patients from './pages/Patients';
 import DiseaseTrends from './pages/DiseaseTracking'
 import ResourceUtilization from "./pages/ResourceUtilization";
+import Reports from "./pages/Reports"
 function App() {
   return (
     <Router>
@@ -17,7 +18,7 @@ function App() {
           <Route path="/hospital-resources" element={<ResourceUtilization />} />
           <Route path="/disease-trends" element={<DiseaseTrends />} />
           <Route path="/resource-utilization" element={<ResourceUtilization />} />
-          
+          <Route path="/reports" element={<Reports />} />
         </Routes>
       </div>
     </Router>

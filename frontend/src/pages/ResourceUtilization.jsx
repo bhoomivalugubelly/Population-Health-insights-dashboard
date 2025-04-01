@@ -173,7 +173,7 @@ const ResourceUtilization = () => {
         <Link to="/">Dashboard</Link>
         <Link to="/patients">Patients</Link>
         <Link to="/disease-trends">Disease Trends</Link>
-        <Link to="/resource-utilization" className="active">Resource Utilization</Link>
+        <Link to="/resource-utilization" className="active">Hospital Resources</Link>
         <Link to="/reports">Reports</Link>
       </nav>
       <main className="main-content">

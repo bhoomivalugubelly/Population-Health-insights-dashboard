@@ -88,6 +88,7 @@ const DiseaseTracking = () => {
         <Link to="/">Dashboard</Link>
         <Link to="/patients">Patients</Link>
         <Link to="/disease-trends" className="active">Disease Trends</Link>
+        <Link to="/hospital-resources">Hospital Resources</Link>
         <Link to="/reports">Reports</Link>
       </nav>
       <main className="main-content">

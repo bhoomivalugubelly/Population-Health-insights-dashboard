@@ -1,4 +1,3 @@
-/* Global Styles */
 .patients-page {
   font-family: 'Inter', Arial, sans-serif;
   background: linear-gradient(135deg, #F7FAFC 0%, #E5E7EB 100%);
@@ -7,7 +6,6 @@
   margin: 0;
 }
 
-/* Header */
 .header {
   background: linear-gradient(90deg, #3B82F6 0%, #1E3A8A 100%);
   color: white;
@@ -23,7 +21,6 @@
   letter-spacing: 1px;
 }
 
-/* Navbar */
 .navbar {
   display: flex;
   justify-content: center;
@@ -54,7 +51,6 @@
   background: #EFF6FF;
 }
 
-/* Main Content */
 .main-content {
   max-width: 1400px;
   margin: 0 auto;
@@ -74,12 +70,10 @@
   letter-spacing: 1.5px;
 }
 
-/* Focus Selector */
 .focus-selector {
   display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: 10px;
   margin-bottom: 50px;
 }
 
@@ -105,7 +99,6 @@
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
 }
 
-/* Insights Grid */
 .insights-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -134,81 +127,138 @@
   text-transform: uppercase;
 }
 
-.risk-card {
-  grid-row: span 2;
+/* Updated styles for the trend-card (pie chart) */
+.trend-card {
+  min-height: 450px; /* Increased minimum height to accommodate larger chart */
 }
 
-/* City Card */
-.city-card .city-list {
+/* Styles for other cards remain the same */
+.city-card {
+  position: relative;
+}
+
+.city-list-container {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  align-items: center;
+}
+
+.city-list {
+  max-height: 300px;
+  overflow-y: auto;
+  width: 100%;
+  padding-right: 10px;
+}
+
+.city-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.city-list::-webkit-scrollbar-track {
+  background: #F1F5F9;
+  border-radius: 10px;
+}
+
+.city-list::-webkit-scrollbar-thumb {
+  background: #3B82F6;
+  border-radius: 10px;
+}
+
+.city-list::-webkit-scrollbar-thumb:hover {
+  background: #1E3A8A;
 }
 
 .city-item {
   display: flex;
   align-items: center;
-  gap: 20px;
+  padding: 10px 0;
+  border-bottom: 1px solid #E2E8F0;
 }
 
 .city-rank {
-  font-size: 20px;
-  font-weight: 800;
+  font-size: 18px;
+  font-weight: 700;
   color: #3B82F6;
-  width: 30px;
-  text-align: center;
+  margin-right: 15px;
 }
 
 .city-details {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 .city-name {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: #1F2937;
 }
 
 .progress-bar {
+  width: 100%;
+  height: 8px;
   background: #E2E8F0;
-  height: 10px;
-  border-radius: 5px;
-  overflow: hidden;
+  border-radius: 4px;
+  margin: 5px 0;
 }
 
 .progress-fill {
-  background: #10B981;
   height: 100%;
-  transition: width 0.5s ease-in-out;
+  background: #3B82F6;
+  border-radius: 4px;
 }
 
 .city-count {
-  font-size: 16px;
-  color: #6B7280;
+  font-size: 14px;
+  color: #475569;
 }
 
-/* Condition Card */
-.condition-card .condition-list {
+.scroll-button {
+  background: #3B82F6;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
   display: flex;
-  flex-direction: column;
-  gap: 15px;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  margin: 5px 0;
+}
+
+.scroll-button:hover {
+  background: #1E3A8A;
+}
+
+.scroll-up {
+  position: sticky;
+  top: 0;
+}
+
+.scroll-down {
+  position: sticky;
+  bottom: 0;
+}
+
+.condition-list, .takeaways-card ul {
+  list-style: none;
+  padding: 0;
 }
 
 .condition-item {
   display: flex;
   align-items: center;
-  gap: 15px;
+  padding: 10px 0;
+  border-bottom: 1px solid #E2E8F0;
 }
 
 .condition-rank {
-  font-size: 20px;
-  font-weight: 800;
-  color: #EC4899;
-  width: 30px;
-  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: #3B82F6;
+  margin-right: 15px;
 }
 
 .condition-details {
@@ -216,46 +266,32 @@
 }
 
 .condition-name {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: #1F2937;
 }
 
 .condition-stats {
-  font-size: 16px;
-  color: #6B7280;
-}
-
-/* Takeaways Card */
-.takeaways-card ul {
-  list-style: none;
-  padding: 0;
+  font-size: 14px;
   color: #475569;
 }
 
 .takeaways-card li {
-  margin-bottom: 20px;
-  padding: 15px;
-  background: #F1F5F9;
-  border-radius: 10px;
   font-size: 16px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  transition: background 0.3s ease;
+  color: #1F2937;
+  margin-bottom: 10px;
+  padding-left: 20px;
+  position: relative;
 }
 
-.takeaways-card li:hover {
-  background: #DBEAFE;
+.takeaways-card li:before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: #3B82F6;
+  font-size: 20px;
 }
 
-.takeaway-0:before { content: '📊'; }
-.takeaway-1:before { content: '👥'; }
-.takeaway-2:before { content: '⚕️'; }
-.takeaway-3:before { content: '💰'; }
-
-/* Loading and Error States */
 .loading {
   text-align: center;
   padding: 60px;
@@ -290,21 +326,9 @@
   background: #B91C1C;
 }
 
-/* Responsive Design */
 @media (max-width: 768px) {
   .insights-grid {
     grid-template-columns: 1fr;
-  }
-
-  .navbar {
-    flex-wrap: wrap;
-    gap: 25px;
-    padding: 20px;
-  }
-
-  .focus-selector {
-    flex-direction: column;
-    gap: 15px;
   }
 
   .header h1 {
@@ -315,16 +339,13 @@
     font-size: 26px;
   }
 
-  .risk-card {
-    grid-row: auto;
+  .navbar {
+    flex-wrap: wrap;
+    gap: 25px;
+    padding: 20px;
   }
 
-  .city-item, .condition-item {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .city-rank, .condition-rank {
-    margin-bottom: 10px;
+  .trend-card {
+    min-height: 400px; /* Slightly smaller height for mobile */
   }
 }

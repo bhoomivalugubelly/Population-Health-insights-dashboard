@@ -1,20 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import './Patients.css';
 
-const PIE_COLORS = ['#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6','#CC8899'];
+const PIE_COLORS = ['#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6', '#CC8899'];
 
 function Patients() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [focusArea, setFocusArea] = useState('Cost Drivers');
-  const [rawData, setRawData] = useState([]); // Store raw API data
+  const [rawData, setRawData] = useState([]);
   const [riskData, setRiskData] = useState([]);
   const [costTrends, setCostTrends] = useState([]);
   const [cityData, setCityData] = useState([]);
   const [topConditions, setTopConditions] = useState([]);
   const [takeaways, setTakeaways] = useState([]);
+
+  const cityListRef = useRef(null);
 
   useEffect(() => {
     fetchHealthData();
@@ -22,7 +24,7 @@ function Patients() {
 
   useEffect(() => {
     if (rawData.length > 0) {
-      processHealthInsights(rawData); // Reprocess data when focusArea changes
+      processHealthInsights(rawData);
     }
   }, [focusArea, rawData]);
 
@@ -32,7 +34,7 @@ function Patients() {
       const response = await fetch('http://localhost:5000/api/patients');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      setRawData(data); // Store raw data
+      setRawData(data);
     } catch (err) {
       setError(`Failed to fetch data: ${err.message}`);
     } finally {
@@ -84,11 +86,13 @@ function Patients() {
     const ageCostTrends = Object.keys(ageGroups).map(group => ({
       name: group,
       avgCost: ageGroups[group].length ? ageGroups[group].reduce((sum, p) => sum + p.expenses, 0) / ageGroups[group].length : 0
-    }));
+    })).filter(group => group.avgCost > 0);
     const raceCostTrends = Object.keys(raceGroups).map(race => ({
       name: race,
       avgCost: raceGroups[race].length ? raceGroups[race].reduce((sum, p) => sum + p.expenses, 0) / raceGroups[race].length : 0
-    }));
+    })).filter(race => race.avgCost > 0);
+
+    console.log('Cost Trends:', focusArea === 'Cost Drivers' ? ageCostTrends : raceCostTrends);
 
     setRiskData(focusArea === 'Cost Drivers' ? riskByAge : riskByRace);
     setCostTrends(focusArea === 'Cost Drivers' ? ageCostTrends : raceCostTrends);
@@ -97,7 +101,7 @@ function Patients() {
     const topConditionsData = Object.entries(conditionCounts)
       .map(([condition, { count, totalHRI }]) => ({
         name: condition,
-        avgHRI: totalHRI / count,
+        avgHRI: count > 0 ? totalHRI / count : 0, // Renamed to avgHRI and added fallback for count = 0
         count
       }))
       .sort((a, b) => b.avgHRI - a.avgHRI)
@@ -111,9 +115,42 @@ function Patients() {
     setTakeaways([
       `Highest Risk Age: ${highRiskAge.name} (HRI: ${highRiskAge.hri.toFixed(1)})`,
       `Highest Risk Race: ${highRiskRace.name} (HRI: ${highRiskRace.hri.toFixed(1)})`,
-      `Top Condition: ${topCondition} (Avg HRI: ${topConditionsData[0]?.avgHRI.toFixed(1) || 'N/A'})`,
+      `Top Condition: ${topCondition} (Avg HRI: ${topConditionsData[0]?.avgHRI ? topConditionsData[0].avgHRI.toFixed(1) : 'N/A'})`, // Fixed property name and added fallback
       `Total Cost: $${totalCost.toFixed(2)}M`
     ]);
+  };
+
+  const scrollUp = () => {
+    if (cityListRef.current) {
+      cityListRef.current.scrollBy({ top: -50, behavior: 'smooth' });
+    }
+  };
+
+  const scrollDown = () => {
+    if (cityListRef.current) {
+      cityListRef.current.scrollBy({ top: 50, behavior: 'smooth' });
+    }
+  };
+
+  const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }) => {
+    const RADIAN = Math.PI / 180;
+    const radius = outerRadius + 30;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+    const percentValue = (percent * 100).toFixed(1);
+    if (percentValue <= 0) return null;
+    return (
+      <text
+        x={x}
+        y={y}
+        fill="#1F2937"
+        textAnchor={x > cx ? 'start' : 'end'}
+        dominantBaseline="central"
+        fontSize={12}
+      >
+        {`${costTrends[index].name}: ${percentValue}%`}
+      </text>
+    );
   };
 
   return (
@@ -124,8 +161,8 @@ function Patients() {
       <nav className="navbar">
         <Link to="/">Dashboard</Link>
         <Link to="/patients" className="active">Patients</Link>
-       
-        <Link to="/disease-trends" >Disease Trends</Link>
+        <Link to="/disease-trends">Disease Trends</Link>
+        <Link to="/hospital-resources">Hospital Resources</Link>
         <Link to="/reports">Reports</Link>
       </nav>
       <main className="main-content">
@@ -151,8 +188,22 @@ function Patients() {
               <h3>Health Risk Index (HRI)</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={riskData}>
-                  <XAxis dataKey="name" />
-                  <YAxis />
+                  <XAxis
+                    dataKey="name"
+                    label={{
+                      value: focusArea === 'Cost Drivers' ? 'Age Group' : 'Race',
+                      position: 'insideBottom',
+                      offset: -10
+                    }}
+                  />
+                  <YAxis
+                    label={{
+                      value: 'Average HRI',
+                      angle: -90,
+                      position: 'insideLeft',
+                      offset: -20
+                    }}
+                  />
                   <Tooltip formatter={(value) => value.toFixed(1)} />
                   <Bar dataKey="hri" fill="#3B82F6" />
                 </BarChart>
@@ -161,40 +212,55 @@ function Patients() {
 
             <section className="insight-card trend-card">
               <h3>{focusArea === 'Cost Drivers' ? 'Cost Distribution by Age' : 'Cost Distribution by Race'}</h3>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={400}>
                 <PieChart>
                   <Pie
                     data={costTrends}
-                    cx="50%" cy="50%" outerRadius={100} dataKey="avgCost"
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={130}
+                    dataKey="avgCost"
+                    label={renderCustomizedLabel}
+                    labelLine={true}
+                    paddingAngle={3}
+                    minAngle={2}
                   >
                     {costTrends.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip formatter={(value) => `$${value.toLocaleString()}`} />
+                  <Legend />
                 </PieChart>
               </ResponsiveContainer>
             </section>
 
             <section className="insight-card city-card">
               <h3>Top 10 Cities by Patient Count</h3>
-              <div className="city-list">
-                {cityData.map((row, index) => (
-                  <div key={index} className="city-item">
-                    <span className="city-rank">{index + 1}</span>
-                    <div className="city-details">
-                      <span className="city-name">{row.city}</span>
-                      <div className="progress-bar">
-                        <div
-                          className="progress-fill"
-                          style={{ width: `${(row.count / cityData[0].count) * 100}%` }}
-                        ></div>
+              <div className="city-list-container">
+                <button className="scroll-button scroll-up" onClick={scrollUp} aria-label="Scroll Up">
+                  ↑
+                </button>
+                <div className="city-list" ref={cityListRef}>
+                  {cityData.map((row, index) => (
+                    <div key={index} className="city-item">
+                      <span className="city-rank">{index + 1}</span>
+                      <div className="city-details">
+                        <span className="city-name">{row.city}</span>
+                        <div className="progress-bar">
+                          <div
+                            className="progress-fill"
+                            style={{ width: `${(row.count / cityData[0].count) * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="city-count">{row.count} patients</span>
                       </div>
-                      <span className="city-count">{row.count} patients</span>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+                <button className="scroll-button scroll-down" onClick={scrollDown} aria-label="Scroll Down">
+                  ↓
+                </button>
               </div>
             </section>
 
@@ -207,7 +273,7 @@ function Patients() {
                     <div className="condition-details">
                       <span className="condition-name">{condition.name}</span>
                       <span className="condition-stats">
-                        Avg HRI: {condition.avgHRI.toFixed(1)} | {condition.count} patients
+                        Avg HRI: {condition.avgHRI ? condition.avgHRI.toFixed(1) : 'N/A'} | {condition.count} patients
                       </span>
                     </div>
                   </div>
