@@ -26,7 +26,7 @@ const Reports = () => {
     } catch (err) {
       console.error('Fetch years error:', err);
       setError(`Failed to fetch years: ${err.message}`);
-      setAvailableYears([]); // Fallback to empty array
+      setAvailableYears([]);
     }
   };
 
@@ -73,10 +73,12 @@ const Reports = () => {
   const handleDownloadCSV = () => fetchReport('csv');
 
   const renderReportContent = () => {
+    // If reportData is null or undefined, show the no-data message
     if (!reportData) {
       return <p className="no-data">Select a report type and year, then click "Generate Report".</p>;
     }
 
+    // For summary report, expect reportData to be an object
     if (reportType === 'summary') {
       return (
         <div className="report-table">
@@ -102,7 +104,13 @@ const Reports = () => {
           </table>
         </div>
       );
-    } else if (reportType === 'conditions') {
+    }
+
+    // For conditions report, expect reportData to be an array
+    if (reportType === 'conditions') {
+      if (!Array.isArray(reportData)) {
+        return <p className="no-data">No conditions data available for the selected year.</p>;
+      }
       return (
         <div className="report-table">
           <table>
@@ -117,9 +125,9 @@ const Reports = () => {
             <tbody>
               {reportData.map((row, index) => (
                 <tr key={index}>
-                  <td>{row.condition}</td>
-                  <td>{row.patientCount.toLocaleString()}</td>
-                  <td>${row.totalCost.toLocaleString()}</td>
+                  <td>{row.condition || 'N/A'}</td>
+                  <td>{row.patientCount ? row.patientCount.toLocaleString() : 'N/A'}</td>
+                  <td>${row.totalCost ? row.totalCost.toLocaleString() : '0'}</td>
                   <td>{row.avgHRI ? row.avgHRI.toFixed(1) : 'N/A'}</td>
                 </tr>
               ))}
@@ -127,7 +135,13 @@ const Reports = () => {
           </table>
         </div>
       );
-    } else if (reportType === 'resources') {
+    }
+
+    // For resources report, expect reportData to be an array
+    if (reportType === 'resources') {
+      if (!Array.isArray(reportData)) {
+        return <p className="no-data">No resource data available for the selected year.</p>;
+      }
       return (
         <div className="report-table">
           <table>
@@ -142,10 +156,10 @@ const Reports = () => {
             <tbody>
               {reportData.map((row, index) => (
                 <tr key={index}>
-                  <td>{row.year}</td>
-                  <td>{row.encounters.toLocaleString()}</td>
-                  <td>${row.totalCost.toLocaleString()}</td>
-                  <td>${row.avgCostPerEncounter.toLocaleString()}</td>
+                  <td>{row.year || 'N/A'}</td>
+                  <td>{row.encounters ? row.encounters.toLocaleString() : '0'}</td>
+                  <td>${row.totalCost ? row.totalCost.toLocaleString() : '0'}</td>
+                  <td>${row.avgCostPerEncounter || row.avgCostPerEncounter === 0 ? row.avgCostPerEncounter.toLocaleString() : '0'}</td>
                 </tr>
               ))}
             </tbody>
@@ -153,6 +167,8 @@ const Reports = () => {
         </div>
       );
     }
+
+    return null; // Fallback in case none of the conditions match
   };
 
   return (

@@ -412,14 +412,46 @@ def get_reports():
             cond_df = conditions.merge(patients[['Id']], left_on='PATIENT', right_on='Id', how='left')
             enc_cost_df = enc_df.groupby('PATIENT')['TOTAL_CLAIM_COST'].sum().reset_index()
             patient_df = patients.merge(enc_cost_df, left_on='Id', right_on='PATIENT', how='left').fillna({'TOTAL_CLAIM_COST': 0})
-            patient_df['HRI'] = patient_df['HEALTHCARE_EXPENSES'] / patient_df['TOTAL_CLAIM_COST'].replace(0, 1) * 100  # Simplified HRI
-            cond_df = cond_df.merge(patient_df[['Id', 'TOTAL_CLAIM_COST', 'HRI']], left_on='PATIENT', right_on='Id', how='left')
+            
+            # Calculate the number of conditions per patient
+            condition_counts = cond_df.groupby('PATIENT')['DESCRIPTION'].count().reset_index().rename(columns={'DESCRIPTION': 'condition_count'})
+            patient_df = patient_df.merge(condition_counts, left_on='Id', right_on='PATIENT', how='left').fillna({'condition_count': 0})
+            
+            # Calculate the number of medications per patient
+            med_counts = medications.groupby('PATIENT').size().reset_index(name='medication_count')
+            patient_df = patient_df.merge(med_counts, left_on='Id', right_on='PATIENT', how='left').fillna({'medication_count': 0})
+        
+            patient_df['scaled_expenses'] = np.log1p(patient_df['HEALTHCARE_EXPENSES'] / 100)
+            patient_df['scaled_claims'] = np.log1p(patient_df['TOTAL_CLAIM_COST'] / 100)
+            max_conditions = patient_df['condition_count'].max()
+            patient_df['scaled_conditions'] = patient_df['condition_count'] / max_conditions if max_conditions > 0 else 0
+            max_medications = patient_df['medication_count'].max()
+            patient_df['scaled_medications'] = patient_df['medication_count'] / max_medications if max_medications > 0 else 0
+            patient_df['raw_hri'] = (patient_df['scaled_conditions'] * 0.3 + 
+                                     patient_df['scaled_expenses'] * 0.3 + 
+                                     patient_df['scaled_claims'] * 0.2 + 
+                                     patient_df['scaled_medications'] * 0.2)
+            max_raw_hri = patient_df['raw_hri'].max()
+            min_raw_hri = patient_df['raw_hri'].min()
+            if max_raw_hri > min_raw_hri:
+                patient_df['HRI'] = ((patient_df['raw_hri'] - min_raw_hri) / (max_raw_hri - min_raw_hri) * 100).clip(upper=100)
+            else:
+                patient_df['HRI'] = 0
+            
+            cond_df = cond_df.merge(patient_df[['Id', 'TOTAL_CLAIM_COST', 'HRI', 'condition_count']], left_on='PATIENT', right_on='Id', how='left')
             if year_filter != 'All':
                 cond_df = cond_df[cond_df['START'].dt.year == int(year_filter)]
             
+            # Filter out non-clinical conditions
+            excluded_conditions = ['Full-time employment (finding)', 'Part-time employment (finding)', 'Not in labor force (finding)']
+            cond_df = cond_df[~cond_df['DESCRIPTION'].isin(excluded_conditions)]
+            
+            # Apportion TOTAL_CLAIM_COST based on the number of conditions
+            cond_df['apportioned_cost'] = cond_df['TOTAL_CLAIM_COST'] / cond_df['condition_count'].replace(0, 1)
+
             top_conditions = (cond_df.groupby('DESCRIPTION')
-                              .agg({'PATIENT': 'nunique', 'TOTAL_CLAIM_COST': 'sum', 'HRI': 'mean'})
-                              .rename(columns={'PATIENT': 'patientCount', 'TOTAL_CLAIM_COST': 'totalCost', 'HRI': 'avgHRI'})
+                              .agg({'PATIENT': 'nunique', 'apportioned_cost': 'sum', 'HRI': 'mean'})
+                              .rename(columns={'PATIENT': 'patientCount', 'apportioned_cost': 'totalCost', 'HRI': 'avgHRI'})
                               .sort_values('patientCount', ascending=False)
                               .head(10))
             data = top_conditions.reset_index().rename(columns={'DESCRIPTION': 'condition'}).to_dict(orient='records')
@@ -431,7 +463,7 @@ def get_reports():
             yearly_data = (enc_df.groupby('year')
                            .agg({'Id': 'count', 'TOTAL_CLAIM_COST': 'sum'})
                            .rename(columns={'Id': 'encounters', 'TOTAL_CLAIM_COST': 'totalCost'}))
-            yearly_data['avgCostPerEncounter'] = (yearly_data['totalCost'] / yearly_data['encounters']).round(2)
+            yearly_data['avgCostPerEncounter'] = (yearly_data['totalCost'] / yearly_data['encounters']).where(yearly_data['encounters'] > 0, 0).round(2)
             data = yearly_data.reset_index().to_dict(orient='records')
             headers = ['Year', 'Encounters', 'Total Cost', 'Average Cost Per Encounter']
             csv_rows = [headers] + [[row['year'], row['encounters'], f"${row['totalCost']:,.2f}", f"${row['avgCostPerEncounter']:,.2f}"] for row in data]
